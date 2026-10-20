@@ -1,0 +1,77 @@
+"""全局配置。一个冻结对象，从环境变量读，读一次。
+
+原则：预算相关的数字只在这里出现一次，别处引用 config，不写字面量。
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+def _get_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    return default if raw is None or raw.strip() == "" else float(raw)
+
+
+def _get_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    return default if raw is None or raw.strip() == "" else int(raw)
+
+
+@dataclass(frozen=True)
+class Settings:
+    llm_provider: str = "mock"
+    llm_api_base: str = ""
+    llm_api_key: str = ""
+    decision_model: str = "mock-decision"
+    reasoning_model: str = "mock-reasoning"
+
+    rag_base_url: str = ""
+    rag_api_key: str = ""
+    rag_timeout_s: float = 2.0
+    rag_top_k: int = 10
+    rag_judge_top_k: int = 3
+
+    max_calls_per_session: int = 12
+    cost_budget_cny: float = 0.08
+    min_rounds: int = 2
+    max_rounds: int = 3
+    escalate_confidence: float = 0.72
+    prefetch: bool = True
+    items_per_session: int = 3
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        return cls(
+            llm_provider=os.getenv("LLM_PROVIDER", "mock"),
+            llm_api_base=os.getenv("LLM_API_BASE", ""),
+            llm_api_key=os.getenv("LLM_API_KEY", ""),
+            decision_model=os.getenv("DECISION_MODEL", "mock-decision"),
+            reasoning_model=os.getenv("REASONING_MODEL", "mock-reasoning"),
+            rag_base_url=os.getenv("RAG_BASE_URL", ""),
+            rag_api_key=os.getenv("RAG_API_KEY", ""),
+            rag_timeout_s=_get_float("RAG_TIMEOUT_S", 2.0),
+            rag_top_k=_get_int("RAG_TOP_K", 10),
+            rag_judge_top_k=_get_int("RAG_JUDGE_TOP_K", 3),
+            max_calls_per_session=_get_int("MAX_CALLS_PER_SESSION", 12),
+            cost_budget_cny=_get_float("COST_BUDGET_CNY", 0.08),
+            min_rounds=_get_int("MIN_ROUNDS", 2),
+            max_rounds=_get_int("MAX_ROUNDS", 3),
+            escalate_confidence=_get_float("ESCALATE_CONFIDENCE", 0.72),
+            prefetch=_get_bool("PREFETCH", True),
+            items_per_session=_get_int("ITEMS_PER_SESSION", 3),
+        )
+
+    def use_mock_llm(self) -> bool:
+        return self.llm_provider.strip().lower() == "mock"
+
+
+DEFAULT_SETTINGS = Settings.from_env()

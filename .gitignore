@@ -218,3 +218,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- 本项目 ----
+# 密钥：除了样例，一律不进仓库
+.env.*
+!.env.example
+
+# 运行时数据：题库、已封印的证据、学生作答记录
+data/
+*.sqlite
+*.sqlite3
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
+
