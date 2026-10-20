@@ -9,7 +9,8 @@
     3  结算恰好 1 次决策调用，升级最多 1 次；
     4  封印之后 retrieve()/index() 直接抛错，只有 fetch() 还能读；
     5  题库命中时不再出题、不再埋雷（离线调用为 0）；
-    6  未通过复核的题不参与评分。
+    6  未通过复核的题不参与评分；
+    7  对抗与裁判不同源（同源时升级复核等于自己查自己，功能上看不出症状）。
 """
 
 from __future__ import annotations
@@ -148,6 +149,10 @@ def main() -> int:
         report.calls == sum(stages.values()),
         "总数 %d 与阶段分布之和 %d 对不上" % (report.calls, sum(stages.values())),
     )
+
+    # 厂商隔离：对抗与升级裁判同源时，这次复核等于自己查自己。
+    # 功能上看不出症状，只有这条检查会先喊出来。
+    check(router.vendor_isolated, "演练模式下厂商隔离应成立：对抗与裁判必须不同源")
 
     # 4：封印
     check(retriever.sealed, "会话打开后索引应处于封印状态")

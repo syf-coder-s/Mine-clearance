@@ -17,8 +17,12 @@ from .base import LLMClient, LLMError, LLMResponse, Message, TokenCallback
 
 # 阶段 → 档位。这个映射就是「两级裁判切在可判性上」的代码表达：
 # 只有 judge_decision 走决策档，其余都要推理。
+#
+# adversary 自己一档，不与 judge_escalation 共用：升级裁判要复核的正是
+# 对抗方参与过的对话，同一个模型既当质询者又当复核者，这次复核等于自己查自己。
+# 编排文档表 9 第七行把这条标成「已定」，落点就是这张表。
 STAGE_TIER: Dict[str, str] = {
-    "adversary": "reasoning",
+    "adversary": "adversary",
     "judge_decision": "decision",
     "judge_escalation": "reasoning",
     "report": "decision",
@@ -26,10 +30,13 @@ STAGE_TIER: Dict[str, str] = {
 
 
 class Router:
-    def __init__(self, clients: Mapping[str, LLMClient]) -> None:
+    def __init__(self, clients: Mapping[str, LLMClient], *, vendor_isolated: bool = True) -> None:
         if not clients:
             raise ValueError("至少需要一档模型")
         self._clients: Dict[str, LLMClient] = dict(clients)
+        # 厂商隔离是否真的成立。为假时会话照常跑，但 /v1/health 与 summary() 都如实报告，
+        # 不让「只配了一家厂商」伪装成「已按要求交叉」。
+        self.vendor_isolated = vendor_isolated
         self.offline_calls = 0
         self.offline_cost_cny = 0.0
 
@@ -80,19 +87,24 @@ class Router:
         return {
             "offline_calls": self.offline_calls,
             "offline_cost_cny": self.offline_cost_cny,
+            "vendor_isolated": self.vendor_isolated,
         }
 
 
 def build_router(settings: Settings) -> Router:
-    """按配置拼两档。默认全假模型，保证没有密钥也能跑通。"""
+    """按配置拼三档。默认全假模型，保证没有密钥也能跑通。"""
     if settings.use_mock_llm():
         from .mock import MockLLM
 
+        # 演练模式也必须是三个独立实例：隔离机制本身要能被测到，
+        # 否则真实模式下它坏了也不会有任何测试先响。
         return Router(
             {
-                "decision": MockLLM(name="mock", tier="decision"),
-                "reasoning": MockLLM(name="mock", tier="reasoning"),
-            }
+                "decision": MockLLM(name="mock-decision", tier="decision"),
+                "reasoning": MockLLM(name="mock-reasoning", tier="reasoning"),
+                "adversary": MockLLM(name="mock-adversary", tier="reasoning"),
+            },
+            vendor_isolated=True,
         )
 
     from .openai_compat import OpenAICompatLLM
@@ -100,17 +112,28 @@ def build_router(settings: Settings) -> Router:
     if not settings.llm_api_base:
         raise LLMError("LLM_PROVIDER 不是 mock 时必须配 LLM_API_BASE")
 
-    return Router(
-        {
-            "decision": OpenAICompatLLM(
-                model=settings.decision_model,
-                api_base=settings.llm_api_base,
-                api_key=settings.llm_api_key,
-            ),
-            "reasoning": OpenAICompatLLM(
-                model=settings.reasoning_model,
-                api_base=settings.llm_api_base,
-                api_key=settings.llm_api_key,
-            ),
-        }
-    )
+    clients = {
+        "decision": OpenAICompatLLM(
+            model=settings.decision_model,
+            api_base=settings.llm_api_base,
+            api_key=settings.llm_api_key,
+        ),
+        "reasoning": OpenAICompatLLM(
+            model=settings.reasoning_model,
+            api_base=settings.llm_api_base,
+            api_key=settings.llm_api_key,
+        ),
+    }
+
+    if settings.adversary_api_base:
+        clients["adversary"] = OpenAICompatLLM(
+            model=settings.adversary_model or settings.reasoning_model,
+            api_base=settings.adversary_api_base,
+            api_key=settings.adversary_api_key,
+        )
+        return Router(clients, vendor_isolated=True)
+
+    # 只配了一家厂商：宁可复用也不要中断会话（现场演示不能因为少一个 key 就开不了局），
+    # 但隔离不成立这件事必须能被看到，不能由代码替部署方宣称「已交叉」。
+    clients["adversary"] = clients["reasoning"]
+    return Router(clients, vendor_isolated=False)

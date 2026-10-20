@@ -119,6 +119,9 @@ def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore
             "status": "ok",
             "schema_version": SCHEMA_VERSION,
             "llm_provider": settings.llm_provider,
+            # false = 只配了一家厂商，对抗与升级裁判同源。判级复核因此不可信，
+            # 这一行是给「你们怎么保证不同源」这个问题的现场答案。
+            "vendor_isolated": session_store.vendor_isolated(),
             "calls_per_session_cap": settings.max_calls_per_session,
             "cost_budget_cny": settings.cost_budget_cny,
             "stage_limits": dict(STAGE_LIMITS),

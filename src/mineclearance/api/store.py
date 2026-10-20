@@ -125,6 +125,7 @@ class SessionStore:
         self._entries: Dict[str, _Entry] = {}
         self._lock = threading.Lock()
         self._bank_retriever: Optional[Retriever] = None  # 仅供离线建库的检索代理
+        self._router_probe: Optional[Router] = None  # 只为读厂商隔离标记
 
     # ---- 一：开场 ----
 
@@ -303,6 +304,17 @@ class SessionStore:
             return {"backend": "（尚未构造）"}
         summary = getattr(retriever, "summary", None)
         return summary() if callable(summary) else {"backend": type(retriever).__name__}
+
+    def vendor_isolated(self) -> bool:
+        """对抗方与裁判是否真的分属不同厂商。
+
+        惰性构造一个 router 只为读配置——构造 client 不联网、不花调用。
+        /v1/health 上有这一项，是因为「你们怎么保证对抗和裁判不同源」一定会被问到，
+        答案应该是 health 页上的一行字，而不是一句保证。
+        """
+        if self._router_probe is None:
+            self._router_probe = self.router_factory(self.settings)
+        return bool(getattr(self._router_probe, "vendor_isolated", True))
 
     # ---- 内部 ----
 

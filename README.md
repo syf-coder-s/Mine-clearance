@@ -65,9 +65,17 @@ LLM_API_BASE=https://api.example.com/v1
 LLM_API_KEY=sk-xxx
 DECISION_MODEL=<小模型>
 REASONING_MODEL=<推理档模型>
+
+# 对抗方单独一家。留空则复用推理档，会话照常跑，
+# 但 /v1/health 的 vendor_isolated 会是 false——复核等于自己查自己。
+ADVERSARY_API_BASE=
+ADVERSARY_API_KEY=
+ADVERSARY_MODEL=
 ```
 
 `llm/router.py` 负责按档位分发。决策层只吃抽取出来的结构化表，不吃学生的原始文本；这是精度设计，不是省钱设计。
+
+**对抗方与裁判不得同源**：升级裁判复核的正是对抗方参与过的对话，同一个模型既当质询者又当复核者，这次复核等于自己查自己。所以对抗是独立一档（`STAGE_TIER["adversary"]`），配第二家厂商时才算真正隔离；只配一家也能跑，但 `/v1/health` 会如实写 `vendor_isolated: false`——降级可以，假装做到了不行。
 
 ## 接入 RAG
 

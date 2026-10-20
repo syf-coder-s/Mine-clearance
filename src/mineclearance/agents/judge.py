@@ -30,12 +30,14 @@ from ..schemas import (
     Verdict,
 )
 
+# 注意：示例里的 JSON 花括号写成 {{ }}，因为阈值要经 .format() 注入。
 _JUDGE_SYSTEM = (
     "你是判级员。输入是一张抽取表，不是学生的原话。"
-    "只输出 JSON：{\"items\": [{\"item_id\": ..., \"label\": \"defect_present|no_defect|partial\", "
-    "\"confidence\": 0-1 的小数, \"note\": \"一句话\"}]}。"
-    "标签只能从这三个里选。定位或触发条件缺一栏，就不要给 defect_present。"
-    "置信度低于 0.7 就如实写低，不要凑整。"
+    "只输出 JSON：{{\"items\": [{{\"item_id\": ..., \"label\": \"defect_present|no_defect\", "
+    "\"confidence\": 0-1 的小数, \"note\": \"一句话\"}}]}}。"
+    "标签只有命中与未命中两个取值，没有「部分正确」；拿不准就写低置信度，"
+    "不要发明第三个标签。定位或触发条件缺一栏，就不要给 defect_present。"
+    "置信度低于 {threshold:.2f} 就如实写低，不要凑整。"
 )
 
 _ESCALATE_SYSTEM = (
@@ -134,7 +136,16 @@ class Judge:
             level = Level(str(row["derived_level"]))
             escalated = escalated_payload is not None and escalated_payload.get("item_id") == row["item_id"]
             if decision is None:
-                decision = Decision(str(row["item_id"]), JudgeLabel.PARTIAL, 0.5, "预算不足，按抽取表直判")
+                # 预算不足或模型输出越域被丢弃时，退回本地抽取表直判。
+                # 闭集只有命中/未命中：学生至少指出了位置或触发条件就算命中，
+                # 不发明「部分正确」这种中间态（闸二）。
+                hit = bool(row["location_hit"] or row["trigger_hit"])
+                decision = Decision(
+                    str(row["item_id"]),
+                    JudgeLabel.DEFECT if hit else JudgeLabel.NONE,
+                    0.5,
+                    "预算不足或模型输出越域，按抽取表直判",
+                )
             if escalated:
                 level = Level(escalated_payload.get("level") or level.value)
             answer = run.rounds[-1].answer if run.rounds else StudentAnswer(text="（未作答）")
@@ -154,6 +165,7 @@ class Judge:
     # ---- 决策档 ----
 
     def _decide(self, rows: Sequence[Dict[str, object]], budget: CallBudget) -> Dict[str, Decision]:
+        system_prompt = _JUDGE_SYSTEM.format(threshold=self.settings.escalate_confidence)
         lines = ["TASK=judge_decision", "抽取表（由系统生成，不含学生原文）："]
         lines.append(json.dumps(list(rows), ensure_ascii=False, indent=2))
         for row in rows:
@@ -161,7 +173,7 @@ class Judge:
         try:
             response = self.router.call(
                 "judge_decision",
-                [system(_JUDGE_SYSTEM), user("\n".join(lines))],
+                [system(system_prompt), user("\n".join(lines))],
                 budget=budget,
                 temperature=0.0,
             )
@@ -172,11 +184,15 @@ class Judge:
     # ---- 升级 ----
 
     def _pick_escalation(self, decisions: Dict[str, Decision]) -> Optional[str]:
+        """升级给最没把握的那一个。触发条件只有置信度，不看标签。
+
+        标签是闭集（命中/未命中），没有可比的中间态；拿不准程度全部由置信度表达，
+        所以挑最低置信度就是挑最该复核的。
+        """
         if not decisions:
             return None
-        worst = min(decisions.values(), key=lambda d: (d.confidence, d.label != JudgeLabel.PARTIAL))
-        needs = worst.confidence < self.settings.escalate_confidence or worst.label == JudgeLabel.PARTIAL
-        return worst.item_id if needs else None
+        worst = min(decisions.values(), key=lambda d: d.confidence)
+        return worst.item_id if worst.confidence < self.settings.escalate_confidence else None
 
     def _escalate(
         self,
@@ -251,6 +267,12 @@ def _parse_object(text: str) -> dict:
 
 
 def _parse_decisions(text: str) -> Dict[str, Decision]:
+    """解析决策层返回。
+
+    越域的条目直接丢弃，不降级也不补救：槽位有值域是闸三的最后一环，
+    把非法标签翻译成「接近的合法标签」等于给模型的越权开口子。
+    丢掉的条目由 Judge.settle 退回本地抽取表直判，那条路不需要模型。
+    """
     payload = _parse_object(text)
     decisions: Dict[str, Decision] = {}
     for entry in payload.get("items", []):
@@ -262,7 +284,7 @@ def _parse_decisions(text: str) -> Dict[str, Decision]:
         try:
             label = JudgeLabel(str(entry.get("label", "")).strip())
         except ValueError:
-            label = JudgeLabel.PARTIAL
+            continue
         try:
             confidence = float(entry.get("confidence", 0.0))
         except (TypeError, ValueError):

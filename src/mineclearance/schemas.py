@@ -27,11 +27,15 @@ class DefectType(str, Enum):
 
 
 class JudgeLabel(str, Enum):
-    """封闭集。裁判只能从这三个里选，不允许自由文本。"""
+    """封闭集。裁判只能从这两个里选，不允许自由文本。
+
+    只有命中与未命中，没有「部分正确」——这是四道精度闸里的第二道。
+    「大概算对」这类中间态一旦有名字，就会被模型和学生一起当成台阶；
+    拿不准这件事本身由置信度表达，不由标签表达。
+    """
 
     DEFECT = "defect_present"
     NONE = "no_defect"
-    PARTIAL = "partial"
 
 
 class Level(str, Enum):
