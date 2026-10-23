@@ -42,8 +42,11 @@ _JUDGE_SYSTEM = (
 
 _ESCALATE_SYSTEM = (
     "你是复核判级员。现在允许你读原文与整段对话。"
-    "只输出 JSON：{\"label\": ..., \"level\": \"L1_perception|L2_localization|L3_attribution|L4_repair\", "
+    "只输出 JSON：{\"label\": ..., "
+    "\"level\": \"L0_false_alarm|L1_perception|L2_localization|L3_attribution|L4_repair\", "
     "\"rationale\": \"两句话，说明为什么是这个等级\"}。"
+    "L0 只用于误报：学生指认之处经证据核实并无该缺陷，或张冠李戴、"
+    "把无关写法当雷。等级只能从闭集里选，不要发明新标签。"
 )
 
 _LINE_RE = re.compile(r"(第\s*\d+\s*行|line\s*\d+|L\d+:\d+)", re.IGNORECASE)
@@ -61,6 +64,8 @@ def extract_row(item: DefectItem, rounds: Sequence) -> Dict[str, object]:
     trigger_hit = any(word in text.lower() for word in _TRIGGER_WORDS)
     fix_hit = any(word in text.lower() for word in _FIX_WORDS) or bool(answer.proposed_fix.strip())
 
+    # 闭表只能判「停在哪一档」，判不了「说的是不是真的」：
+    # 误报（L0）要对照原文与证据辨方向，只有读原文的升级层能给，表从 L1 起步。
     if not location_hit:
         derived = Level.L1
     elif not trigger_hit:

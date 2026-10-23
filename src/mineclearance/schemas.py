@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 class DefectType(str, Enum):
@@ -39,6 +39,14 @@ class JudgeLabel(str, Enum):
 
 
 class Level(str, Enum):
+    """L0 = 误报，与队友 judgment 合同的 L0~L4 对齐。
+
+    只由升级层（读原文与证据的复核档）给出：闭表三个命中位只能判
+    「学生停在哪一档」，判不了「说的是不是真的」——张冠李戴在表上
+    与「没看出来」长得一样，硬推会冤枉学生。所以抽取表从 L1 起步。
+    """
+
+    L0 = "L0_false_alarm"
     L1 = "L1_perception"
     L2 = "L2_localization"
     L3 = "L3_attribution"
@@ -46,7 +54,13 @@ class Level(str, Enum):
 
     @property
     def rank(self) -> int:
-        return {"L1_perception": 1, "L2_localization": 2, "L3_attribution": 3, "L4_repair": 4}[self.value]
+        return {
+            "L0_false_alarm": 0,
+            "L1_perception": 1,
+            "L2_localization": 2,
+            "L3_attribution": 3,
+            "L4_repair": 4,
+        }[self.value]
 
 
 class SessionState(str, Enum):

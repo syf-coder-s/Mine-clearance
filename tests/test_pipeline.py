@@ -212,6 +212,20 @@ class ReuseTest(unittest.TestCase):
         self.assertEqual(report.unverified_items, 3)
         self.assertEqual(report.calls, 0, "没有可判的题时不该花任何在线调用")
 
+    def test_empty_recall_is_counted_not_silently_dropped(self):
+        # 召回为空的题连 Preparation 都不生成：早先 rejected 按 preparations 数，
+        # 这类题会被静默漏掉，账面显示「全通过」。分母必须是出题单总数。
+        _, _, _, session = new_session(answers=ScriptedAnswers())
+
+        class BlankBuilder:
+            def draft(self, spec):
+                return ""  # 空文档 → 切分为空 → 召回为空
+
+        session.builder = BlankBuilder()
+        handle = session.open(build_specs(), session_id="s_blank")
+        self.assertEqual(handle.runs, [])
+        self.assertEqual(handle.rejected, 3, "三张出题单全军覆没，一个都不能少记")
+
 
 if __name__ == "__main__":
     unittest.main()

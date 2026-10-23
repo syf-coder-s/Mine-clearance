@@ -105,7 +105,9 @@ class Session:
         self._seal()
 
         accepted = [p for p in preparations if p.accepted]
-        handle.rejected = len(preparations) - len(accepted)
+        # 分母用出题单总数而不是 preparations：召回为空的题连 Preparation 都不生成，
+        # 用 preparations 会把它静默漏掉，账面比实际少。
+        handle.rejected = len(specs) - len(accepted)
         if handle.rejected:
             self._log("剔除 %d 道未通过复核的题（不进本场评分）" % handle.rejected)
 

@@ -210,6 +210,34 @@ class EscalationThresholdTest(unittest.TestCase):
         self.assertNotIn("partial", _JUDGE_SYSTEM)
         self.assertIn("defect_present|no_defect", _JUDGE_SYSTEM)
 
+    def test_escalation_closed_set_is_exactly_the_level_enum(self):
+        # 升级层的等级闭集必须与 Level 枚举一字不差：
+        # 少一个，模型想判那一档也输出不了；多一个，settle 会在 Level() 处炸。
+        import re
+
+        from mineclearance.agents.judge import _ESCALATE_SYSTEM
+
+        closed = set(re.findall(r"L\d_[a-z_]+", _ESCALATE_SYSTEM))
+        self.assertEqual(closed, {level.value for level in Level})
+
+    def test_escalation_can_settle_l0_false_alarm(self):
+        # L0 只能从升级层进来：闭表结构上判不了误报，这条管子必须是通的。
+        judge = judge_with(
+            '{"items": [{"item_id": "item-1", "label": "defect_present", "confidence": 0.5, "note": "含糊"}]}',
+            '{"label": "defect_present", "level": "L0_false_alarm", "rationale": "所指之处并无该缺陷。"}',
+        )
+        verdicts = judge.settle((make_run(FULL_ANSWER),), budget=CallBudget(), view=None)
+        self.assertEqual(verdicts[0].level, Level.L0)
+        self.assertTrue(verdicts[0].escalated)
+
+    def test_table_ladder_never_derives_l0(self):
+        # 闭表起步是 L1：三栏全不中只说明「没看出来」，不等于误报，不能推 L0。
+        from mineclearance.agents import extract_row
+
+        row = extract_row(make_run("这段代码看起来不太对劲").item, make_run("嗯").rounds)
+        self.assertEqual(row["derived_level"], Level.L1.value)
+        self.assertNotEqual(row["derived_level"], Level.L0.value)
+
 
 if __name__ == "__main__":
     unittest.main()
