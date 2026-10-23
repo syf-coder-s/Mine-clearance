@@ -48,6 +48,16 @@ class Settings:
     rag_top_k: int = 10
     rag_judge_top_k: int = 3
 
+    # 裁决层（状态机 / 两段式预算 / 锚点）。留空 = 内存实现 FakeUpstream，
+    # 七个端点照常可用；填上就整体切到 HttpUpstream，不做半截降级。
+    upstream_base_url: str = ""
+    upstream_api_key: str = ""
+    upstream_timeout_s: float = 3.0
+
+    # 内部令牌：锚点永不下发学生，/v1/anchor/* 只对带这个头的调用方开放。
+    # 留空 = 一律 403，宁可不给，也不默认敞开。
+    internal_token: str = ""
+
     max_calls_per_session: int = 12
     cost_budget_cny: float = 0.08
     min_rounds: int = 2
@@ -74,6 +84,10 @@ class Settings:
             rag_timeout_s=_get_float("RAG_TIMEOUT_S", 2.0),
             rag_top_k=_get_int("RAG_TOP_K", 10),
             rag_judge_top_k=_get_int("RAG_JUDGE_TOP_K", 3),
+            upstream_base_url=os.getenv("UPSTREAM_BASE_URL", ""),
+            upstream_api_key=os.getenv("UPSTREAM_API_KEY", ""),
+            upstream_timeout_s=_get_float("UPSTREAM_TIMEOUT_S", 3.0),
+            internal_token=os.getenv("MC_INTERNAL_TOKEN", ""),
             max_calls_per_session=_get_int("MAX_CALLS_PER_SESSION", 12),
             cost_budget_cny=_get_float("COST_BUDGET_CNY", 0.08),
             min_rounds=_get_int("MIN_ROUNDS", 2),

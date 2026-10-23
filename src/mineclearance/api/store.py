@@ -251,6 +251,23 @@ class SessionStore:
         with self._lock:
             return len(self._entries)
 
+    def anchors(self, session_id: str) -> List[dict]:
+        """内部用：这道题在 seal 时刻冻结的证据集合，交给裁决层登记。
+
+        只回 item_id / doc_id / evidence_ids 三样。**不带** expected_level、rubric、
+        original——锚点里有答案侧信息，所以 /v1/anchor/* 在壳层还有一道内部令牌。
+        学生可见的 payload 不经过这里（见 _item）。
+        """
+        entry = self._get(session_id)
+        return [
+            {
+                "item_id": run.item.item_id,
+                "doc_id": "doc_%s" % run.item.item_id,
+                "evidence_ids": list(run.item.evidence_ids),
+            }
+            for run in entry.handle.runs
+        ]
+
     # ---- 预留的 RAG 代理 ----
     #
     # 前端**不允许**直连检索后端：那意味着把 RAG_API_KEY 发到浏览器里。

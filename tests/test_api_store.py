@@ -75,6 +75,7 @@ class LeakTest(unittest.TestCase):
             "diff",
             "rubric_hint",
             "expected_level",
+            "anchor",
             "verified",
             "defect",
             "answer",
@@ -205,7 +206,16 @@ class FullSessionTest(unittest.TestCase):
             for evidence_id in verdict["citation"]["supported"]:
                 reference = next(r for r in verdict["references"] if r["evidence_id"] == evidence_id)
                 self.assertTrue(reference["quote"], "已结算的引用应当能取回原文")
-            self.assertIn(verdict["level"], {"L1_perception", "L2_localization", "L3_attribution", "L4_repair"})
+            self.assertIn(
+                verdict["level"],
+                {
+                    "L0_false_alarm",
+                    "L1_perception",
+                    "L2_localization",
+                    "L3_attribution",
+                    "L4_repair",
+                },
+            )
 
     def test_report_has_a_human_readable_part(self):
         self.assertTrue(self.report["markdown"].strip())

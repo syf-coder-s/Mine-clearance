@@ -96,12 +96,19 @@ ADVERSARY_MODEL=
 | POST | `/v1/sessions/{id}/settle` | 结算，产出判级、引用原文与复盘 |
 | POST | `/v1/retrieve` | 预留的检索代理（读方向） |
 | GET | `/v1/evidence/{id}` | 按证据编号取回片段 |
+| POST | `/v1/stage` | 预留的裁决接口：提议下一步，非法转移回 409 |
+| POST | `/v1/budget/reserve` `/commit` `/void` | 预留的两段式预算 |
+| GET | `/v1/anchor/{item_id}` | 锚点，仅内部令牌可读（默认 403） |
+| POST | `/v1/anchor/{item_id}/verify` | 引用越域回 422 |
+
+后四个是给后端对接用的预留接口，默认走内存实现 `FakeUpstream`，契约见 `docs/upstream-api.md`。主链尚未调用它们——先把口径对齐，再接进 `Session.submit` / `settle`。
 
 这一层只守三件事：发给学生的包是**白名单字段**（没有原版、没有 diff、没有 rubric）、证据原文在结算前**一个字都不回显**、会话**单向**（结算后 submit 一律 409）。领域错误带状态码（404 / 409 / 422 / 502），壳里不出现 500 兜底。
 
 ## 文档
 
 - `docs/rag-api.md` —— 后端检索服务要实现什么、`evidence_id` 怎么生成、封印之后哪些调用必须被拒
+- `docs/upstream-api.md` —— 裁决层：状态机、两段式预算、锚点，以及 409 / 403 / 422 的判定口径
 
 
 ## 未做的事

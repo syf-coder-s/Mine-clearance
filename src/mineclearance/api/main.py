@@ -14,6 +14,7 @@ Accept: text/event-stream 就是普通 JSON 响应。流式是体验，不是依
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import queue
@@ -34,6 +35,13 @@ except ModuleNotFoundError as exc:  # pragma: no cover - 只有没装依赖时�
 from ..budget import STAGE_LIMITS
 from ..config import Settings
 from ..schemas import SCHEMA_VERSION, DefectType, ItemSpec, Level
+from ..upstream import (
+    AnchorForbidden,
+    Upstream,
+    UpstreamFault,
+    anchor_view,
+    build_upstream,
+)
 from .store import SessionStore, StoreError
 
 DEFAULT_CORS = ("http://localhost:5173", "http://127.0.0.1:5173")
@@ -81,9 +89,47 @@ class RetrieveIn(BaseModel):
     session_id: Optional[str] = None
 
 
-def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore] = None) -> FastAPI:
+# ---- 裁决层入参（预留给后端对接）----
+#
+# 这几个模型的两个共同点，都是故意的：
+#   1  stage 写成 Optional。缺字段要 409（状态必须由裁决方决定），
+#      而不是 pydantic 默认的 422 —— 422 是「参数格式不对」，语义不一样。
+#   2  不在这里做业务校验（比如「结算后还能不能对抗」），一律交给 upstream。
+
+
+class StageIn(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    stage: Optional[str] = None
+
+
+class ReserveIn(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    stage: Optional[str] = None
+    units: int = Field(1, ge=1, le=3)
+
+
+class CommitIn(BaseModel):
+    reservation_id: str = Field(..., min_length=1)
+    cost_cny: float = Field(0.0, ge=0.0)
+
+
+class VoidIn(BaseModel):
+    reservation_id: str = Field(..., min_length=1)
+
+
+class VerifyIn(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    evidence_ids: List[str] = Field(default_factory=list)
+
+
+def create_app(
+    settings: Optional[Settings] = None,
+    store: Optional[SessionStore] = None,
+    upstream: Optional[Upstream] = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
     session_store = store or SessionStore(settings)
+    decider = upstream or build_upstream(settings)
 
     app = FastAPI(
         title="排雷兵 · Mine-clearance",
@@ -92,6 +138,7 @@ def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore
     )
     app.state.store = session_store
     app.state.settings = settings
+    app.state.upstream = decider
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins(),
@@ -111,6 +158,11 @@ def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore
     def _on_value_error(_: Request, exc: ValueError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"error": "InvalidInput", "detail": str(exc)})
 
+    @app.exception_handler(UpstreamFault)
+    def _on_upstream_fault(_: Request, exc: UpstreamFault) -> JSONResponse:
+        # 409 状态非法 / 403 越权 / 422 越域 / 502 后端连不上，四档都在 exc 上带着。
+        return JSONResponse(status_code=exc.status, content={"error": exc.code, "detail": str(exc)})
+
     # ---- 系统 ----
 
     @app.get("/v1/health", tags=["system"])
@@ -127,6 +179,8 @@ def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore
             "stage_limits": dict(STAGE_LIMITS),
             "probe": type(session_store.probe).__name__ if session_store.probe else "none",
             "rag": session_store.rag_summary(),
+            # fake = 本地内存裁决，http = 已接到后端。这一项和后端同学联调时先看一眼。
+            "upstream": decider.summary(),
             "sessions": session_store.count(),
         }
 
@@ -179,7 +233,87 @@ def create_app(settings: Optional[Settings] = None, store: Optional[SessionStore
     def evidence(evidence_id: str, session_id: Optional[str] = None) -> dict:
         return session_store.evidence(evidence_id, session_id=session_id)
 
+    # ---- 裁决层（预留给后端对接）----
+    #
+    # 现在默认走 FakeUpstream（内存实现），七个端点全都能跑；把 UPSTREAM_BASE_URL
+    # 填上就整体切到 HttpUpstream，一行代码不用改。主链**尚未**调用它们——
+    # 等后端接上，在 Session.submit / settle 各加一行，接法见 docs/upstream-api.md。
+    #
+    # 这里只做两件事：把 JSON 递进去，把异常交给上面的 handler。判断一律不在这层写。
+
+    @app.post("/v1/stage", tags=["upstream"])
+    def propose_stage(payload: StageIn) -> dict:
+        _sync_anchors(session_store, decider, payload.session_id)
+        ticket = decider.propose_stage(payload.session_id, payload.stage or "")
+        return {
+            "session_id": ticket.session_id,
+            "stage": ticket.stage,
+            "previous": ticket.previous,
+            "seq": ticket.seq,
+        }
+
+    @app.post("/v1/budget/reserve", tags=["upstream"])
+    def reserve_budget(payload: ReserveIn) -> dict:
+        _sync_anchors(session_store, decider, payload.session_id)
+        return _reservation_view(decider.reserve(payload.session_id, payload.stage or "", payload.units))
+
+    @app.post("/v1/budget/commit", tags=["upstream"])
+    def commit_budget(payload: CommitIn) -> dict:
+        return _reservation_view(decider.commit(payload.reservation_id, payload.cost_cny))
+
+    @app.post("/v1/budget/void", tags=["upstream"])
+    def void_budget(payload: VoidIn) -> dict:
+        return _reservation_view(decider.void(payload.reservation_id))
+
+    # 锚点只对内部开放：里面有 trigger / fix 这类答案侧信息，下发即泄露。
+    # 令牌留空时一律 403 —— 宁可不给，也不默认敞开。
+
+    @app.get("/v1/anchor/{item_id}", tags=["upstream"])
+    def read_anchor(item_id: str, request: Request, session_id: str) -> dict:
+        _require_internal(settings, request)
+        _sync_anchors(session_store, decider, session_id)
+        return anchor_view(decider.anchor(session_id, item_id))
+
+    @app.post("/v1/anchor/{item_id}/verify", tags=["upstream"])
+    def verify_reference(item_id: str, payload: VerifyIn, request: Request) -> dict:
+        _require_internal(settings, request)
+        _sync_anchors(session_store, decider, payload.session_id)
+        checked = decider.verify_reference(payload.session_id, item_id, payload.evidence_ids)
+        return {"ok": True, "item_id": item_id, "checked": checked}
+
     return app
+
+
+# ---- 裁决层的小工具 ----
+
+
+def _sync_anchors(store: SessionStore, decider: Upstream, session_id: str) -> None:
+    """把这场会话封存的证据集合登记给裁决方。
+
+    登记是幂等的：重复登记必须一字不差，Fake 会拿 409 拦住「中途换判例集合」。
+    HTTP 模式下 sync_session 是空实现——锚点由后端在 seal 时自己冻结。
+    """
+    decider.sync_session(session_id, store.anchors(session_id))
+
+
+def _require_internal(settings: Settings, request: Request) -> None:
+    expected = settings.internal_token
+    if not expected:
+        raise AnchorForbidden("未配置 MC_INTERNAL_TOKEN：锚点只对内部调用方开放")
+    provided = request.headers.get("x-internal-token", "")
+    if not hmac.compare_digest(provided, expected):
+        raise AnchorForbidden("内部令牌不匹配：锚点永不下发学生")
+
+
+def _reservation_view(reservation) -> dict:
+    return {
+        "reservation_id": reservation.reservation_id,
+        "session_id": reservation.session_id,
+        "stage": reservation.stage,
+        "units": reservation.units,
+        "state": reservation.state,
+        "cost_cny": reservation.cost_cny,
+    }
 
 
 # ---- SSE ----
