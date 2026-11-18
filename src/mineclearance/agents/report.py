@@ -22,6 +22,7 @@ _SYSTEM = (
 class Reporter:
     def __init__(self, router: Router) -> None:
         self.router = router
+        self.fallback_used = False
 
     def write(
         self,
@@ -32,6 +33,7 @@ class Reporter:
         budget: CallBudget,
     ) -> str:
         if not verdicts:
+            self.fallback_used = True
             # 一道可判的题都没有时，让模型写一段「本次无可判题」是纯浪费，
             # 而且这段话是确定的，本地模板说得更准。不花这 1 次调用。
             return _local_report(verdicts)
@@ -66,6 +68,7 @@ class Reporter:
                 return text
         except Exception:  # 预算耗尽、网关挂了，都不该让会话失败
             pass
+        self.fallback_used = True
         return _local_report(verdicts)
 
 

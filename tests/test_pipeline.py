@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
@@ -161,6 +163,9 @@ class FullSessionTest(unittest.TestCase):
         self.assertEqual(self.report.session_id, "s_unittest")
         self.assertGreaterEqual(self.report.latency_ms, 0)
         self.assertGreaterEqual(self.report.cost_cny, 0.0)
+        self.assertIn("RAG 使用概览", self.report.markdown)
+        self.assertEqual(self.report.rag_usage["contribution"]["items_total"], 3)
+        self.assertEqual(self.report.rag_usage["contribution"]["case_references_bound"], 0)
 
     def test_settling_twice_is_refused(self):
         _, _, _, session = new_session()
@@ -192,6 +197,26 @@ class RoundControlTest(unittest.TestCase):
 
 
 class ReuseTest(unittest.TestCase):
+    def test_question_bank_round_trips_auxiliary_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "question-bank.json"
+            _, _, _, session = new_session(answers=ScriptedAnswers(), bank=QuestionBank())
+            session.run(build_specs(), session_id="s_cache_fields")
+            item = session.bank.get(build_specs()[0].fingerprint())
+            self.assertIsNotNone(item)
+            item = replace(
+                item,
+                pattern_evidence_ids=("ev_pattern",),
+                negative_evidence_ids=("ev_negative",),
+            )
+            saved = QuestionBank(path)
+            saved.put(item, key="cache-key")
+            loaded = QuestionBank(path).get("cache-key")
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.pattern_evidence_ids, ("ev_pattern",))
+            self.assertEqual(loaded.negative_evidence_ids, ("ev_negative",))
+            self.assertEqual(loaded.test_source, item.test_source)
+
     def test_bank_hit_costs_zero_offline_calls(self):
         _, _, _, first = new_session(answers=ScriptedAnswers(), bank=QuestionBank())
         first.run(build_specs(), session_id="s_bank_seed")

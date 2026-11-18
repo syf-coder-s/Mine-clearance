@@ -1,0 +1,87 @@
+/* ============================================================
+   设计令牌 v2 —— 浅色科技版「冷白 + 电蓝」
+   底色冷白、卡片纯白、只留一个强调色；弱化装饰，强调信息层级。
+   ============================================================ */
+:root {
+  /* 底色与表面 */
+  --bg: #F4F6FA;              /* 页面底（冷白） */
+  --bg-elev: #EEF2F8;         /* 内嵌底：代码、轨道、空态 */
+  --bg-hover: #F8FAFE;        /* 行/卡片 hover */
+  --bg-card: #FFFFFF;         /* 卡片 */
+
+  /* 主色 */
+  --primary: #3157DD;
+  --primary-hover: #2848C4;
+  --primary-active: #1F3BB0;
+  --primary-soft: #EEF2FE;
+  --primary-line: #D9E1F9;
+
+  /* 文字 */
+  --text-main: #101623;
+  --text-secondary: #5A6373;
+  --text-tertiary: #8B94A3;
+  --text-inverse: #FFFFFF;
+
+  /* 线 */
+  --border: #E7EBF2;
+  --border-strong: #D7DEEA;
+  --border-hair: #EDF1F7;
+
+  /* 语义色（低饱和，只用于状态） */
+  --success: #0E9488;
+  --success-strong: #0B6E63;
+  --success-soft: #E8F6F4;
+  --success-line: #BFE6E1;
+  --warning: #B26B14;
+  --warning-soft: #FCF3E4;
+  --warning-line: #F0DCBB;
+  --danger: #CF4438;
+  --danger-soft: #FDEDEB;
+  --danger-line: #F4CFCA;
+
+  /* 代码区（浅色） */
+  --code-bg: #F7F9FD;
+  --code-ink: #1B2637;
+  --code-gutter: #AEB8C7;
+  --code-comment: #8A96A8;
+  --code-keyword: #1B4FD8;
+  --code-string: #0E7C66;
+  --code-number: #B4590B;
+  --code-func: #7A3FD0;
+  --code-builtin: #0E7C66;
+  --code-hl: rgba(207, 68, 56, 0.08);      /* 缺陷行 */
+  --code-sel: rgba(49, 87, 221, 0.10);     /* 选中行 */
+
+  /* 圆角 */
+  --radius-card: 14px;
+  --radius-control: 9px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+
+  /* 阴影（浅色科技：低透明度、大范围、多层叠加） */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 24px -20px rgba(16, 24, 40, 0.35);
+  --shadow-card-hover: 0 1px 2px rgba(16, 24, 40, 0.05), 0 10px 22px -14px rgba(16, 24, 40, 0.16), 0 24px 44px -28px rgba(31, 59, 176, 0.22);
+  --shadow-pop: 0 24px 56px -20px rgba(16, 24, 40, 0.28), 0 2px 6px rgba(16, 24, 40, 0.06);
+  --shadow-inset: inset 0 1px 2px rgba(16, 24, 40, 0.05);
+
+  /* 动效曲线 */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* 布局 */
+  --topbar-h: 60px;
+  --sidebar-w: 232px;
+  --main-pad: 24px;
+
+  /* 字体 */
+  --font-sans: 'Inter', 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Noto Sans SC', monospace;
+
+  /* 间距 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+}

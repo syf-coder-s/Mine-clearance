@@ -1,0 +1,151 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>排雷兵 · 材质实验</title>
+<style>
+@font-face{font-family:'InterVar';src:url('fonts/inter.woff2') format('woff2');font-weight:100 900;font-display:block;}
+@font-face{font-family:'JBMono';src:url('fonts/jbmono-400.woff2') format('woff2');font-weight:400;font-display:block;}
+@font-face{font-family:'JBMono';src:url('fonts/jbmono-600.woff2') format('woff2');font-weight:600;font-display:block;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1300px;padding:32px 34px 26px;background:#EDEDEA;color:#16181B;font-family:'InterVar','Segoe UI','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+.head{display:flex;align-items:flex-end;gap:18px;padding-bottom:16px;border-bottom:1px solid #D6D6CF;margin-bottom:20px}
+.head h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.head .sub{margin-left:auto;font-size:12px;color:#6E7176;text-align:right;line-height:1.7}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.cell{display:flex;flex-direction:column;gap:9px}
+.cap{display:flex;align-items:baseline;gap:9px;padding:0 2px}
+.cap .idx{font-family:'JBMono',monospace;font-size:10px;color:#9A9CA1;letter-spacing:.1em}
+.cap .nm{font-size:13.5px;font-weight:600}
+.cap .note{font-size:11px;color:#787B80;margin-left:auto}
+.stage{height:244px;border-radius:12px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 4px rgba(20,22,26,.06),0 18px 40px -28px rgba(20,22,26,.5)}
+[data-m]{width:86%}.p{width:100%;border-radius:var(--r);background:var(--bg);border:1px solid var(--line);box-shadow:var(--sh);
+  padding:14px 16px;position:relative;overflow:hidden;color:var(--ink);font-size:11.5px}
+.p:before{content:'';position:absolute;inset:0;pointer-events:none;background-image:var(--grain-img);opacity:var(--grain);mix-blend-mode:var(--blend,multiply)}
+.ph{display:flex;align-items:center;gap:8px;margin-bottom:11px;position:relative}
+.ph .t{font-size:12px;font-weight:600;letter-spacing:var(--tls,0)}
+.chip{display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:999px;font-size:10px;font-weight:500;
+  background:var(--acc-soft);color:var(--acc);border:1px solid var(--chip-line,transparent)}
+.ph .sc{margin-left:auto;font-family:'JBMono',monospace;font-size:10px;color:var(--ink3)}
+.mini-row{display:flex;gap:8px;margin-bottom:11px;position:relative}
+.mini{flex:1;padding:8px 10px;border-radius:calc(var(--r) - 5px);background:var(--tile);border:1px solid var(--tile-line)}
+.mini .k{font-size:9.5px;color:var(--ink3);letter-spacing:.04em;text-transform:var(--tt,none)}
+.mini .v{font-family:'JBMono',monospace;font-size:16px;font-weight:600;margin-top:2px;letter-spacing:-.02em}
+.list{position:relative}
+.row{display:flex;align-items:center;gap:8px;padding:6px 2px;border-top:1px solid var(--row-line);font-size:10.5px}
+.row .id{font-family:'JBMono',monospace;font-size:10px;color:var(--ink2);letter-spacing:-.02em}
+.row .dir{color:var(--ink2)}
+.row .st{margin-left:auto;font-size:9.5px;padding:1px 6px;border-radius:999px;background:var(--ok-soft);color:var(--ok)}
+.row .st.w{background:var(--warn-soft);color:var(--warn)}
+.pf{display:flex;align-items:center;gap:8px;margin-top:9px;position:relative}
+.pf .sub{font-size:9.5px;color:var(--ink3)}
+.btn{margin-left:auto;height:24px;padding:0 11px;border-radius:calc(var(--r) - 6px);border:1px solid transparent;
+  background:var(--acc);color:var(--acc-ink,#fff);font-size:10.5px;font-weight:600;font-family:inherit}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink2);margin-left:6px}
+
+/* 噪声纹理 */
+.p{--grain-img:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* 1 纸感哑光 */
+[data-m="paper"]{--bg:#FBFAF6;--line:#E4DFD3;--ink:#1B1D22;--ink2:#6B6E75;--ink3:#9A9C9F;
+  --tile:#F5F2E9;--tile-line:#E8E2D4;--row-line:#EDE8DC;
+  --acc:#4338CA;--acc-soft:#EAE9F8;--acc-ink:#fff;--ok:#2E7D5B;--ok-soft:#E7F1E9;--warn:#A9762E;--warn-soft:#F6EDDC;
+  --r:14px;--sh:0 1px 1px rgba(30,26,18,.05),inset 0 1px 0 rgba(255,255,255,.85);--grain:.09;--stage:#E9E5DA}
+/* 2 磨砂玻璃 */
+[data-m="glass"]{--bg:rgba(255,255,255,.52);--line:rgba(255,255,255,.75);--ink:#141821;--ink2:#4E5768;--ink3:#7C8697;
+  --tile:rgba(255,255,255,.42);--tile-line:rgba(255,255,255,.6);--row-line:rgba(30,45,70,.10);
+  --acc:#2563EB;--acc-soft:rgba(37,99,235,.12);--acc-ink:#fff;--ok:#1F7A55;--ok-soft:rgba(31,122,85,.14);--warn:#9A6B1F;--warn-soft:rgba(154,107,31,.14);
+  --r:18px;--sh:inset 0 1px 0 rgba(255,255,255,.9),0 20px 50px -26px rgba(20,30,60,.55);--grain:.03;--blend:overlay;--stage:#DCE6F2}
+/* 3 暗夜细砂 */
+[data-m="grain"]{--bg:#12161E;--line:rgba(255,255,255,.08);--ink:#E8EDF5;--ink2:#9AA6B8;--ink3:#6C7789;
+  --tile:rgba(255,255,255,.035);--tile-line:rgba(255,255,255,.06);--row-line:rgba(255,255,255,.07);
+  --acc:#6C9BFF;--acc-soft:rgba(108,155,255,.16);--acc-ink:#0B1220;--ok:#4FD6A2;--ok-soft:rgba(79,214,162,.14);--warn:#E8B45F;--warn-soft:rgba(232,180,95,.15);
+  --r:13px;--sh:inset 0 1px 0 rgba(255,255,255,.05),0 22px 50px -30px #000;--grain:.10;--blend:overlay;--stage:#0B0F16}
+/* 4 拉丝钢 */
+[data-m="metal"]{--bg:#FFFFFF;--line:#D3D5D8;--ink:#15202B;--ink2:#5C6773;--ink3:#8E979F;
+  --tile:#F2F4F6;--tile-line:#E1E4E7;--row-line:#ECEEF0;
+  --acc:#B4600A;--acc-soft:#FBEFE0;--acc-ink:#fff;--ok:#2F7A55;--ok-soft:#E9F2EC;--warn:#9C6A18;--warn-soft:#F7EEDA;
+  --r:5px;--sh:0 1px 0 #fff inset,0 1px 2px rgba(20,30,45,.14),0 10px 24px -20px rgba(20,30,45,.6);--grain:.05;--tt:uppercase;--tls:.06em;--stage:#C9CCD0}
+/* 5 蓝图网格 */
+[data-m="blueprint"]{--bg:rgba(10,26,42,.78);--line:rgba(120,200,255,.28);--ink:#DCEEFF;--ink2:#8FB6D6;--ink3:#6A8CA8;
+  --tile:rgba(120,200,255,.05);--tile-line:rgba(120,200,255,.18);--row-line:rgba(120,200,255,.14);
+  --acc:#4FD1FF;--acc-soft:rgba(79,209,255,.14);--acc-ink:#06121E;--ok:#67E0B0;--ok-soft:rgba(103,224,176,.14);--warn:#FFC861;--warn-soft:rgba(255,200,97,.14);
+  --r:3px;--sh:inset 0 0 0 1px rgba(120,200,255,.10),0 0 40px -14px rgba(79,209,255,.35);--grain:.04;--blend:screen;--stage:#071A2B}
+/* 6 柔光拟物 */
+[data-m="soft"]{--bg:#E9ECF2;--line:transparent;--ink:#1D2A3A;--ink2:#5A6577;--ink3:#8A94A3;
+  --tile:#EDF0F6;--tile-line:transparent;--row-line:rgba(120,135,160,.16);
+  --acc:#2F63D9;--acc-soft:#DCE4F7;--acc-ink:#fff;--ok:#2F7D63;--ok-soft:#DDEBE4;--warn:#9A6B2A;--warn-soft:#EFE3CF;
+  --r:20px;
+  --sh:8px 8px 20px rgba(163,174,192,.75),-8px -8px 20px rgba(255,255,255,.95);
+  --grain:0;--stage:#E2E6ED}
+
+/* stage 背景 */
+[data-s="paper"]{background:radial-gradient(120% 100% at 30% 0%,#F3EFE4,#E3DED0)}
+[data-s="glass"]{background:
+  radial-gradient(60% 80% at 12% 10%,#BFD7FF,transparent 60%),
+  radial-gradient(70% 70% at 92% 18%,#FFD9E6,transparent 62%),
+  radial-gradient(80% 90% at 50% 110%,#C8F2E4,transparent 65%),#DCE6F2}
+[data-s="grain"]{background:radial-gradient(80% 90% at 70% 0%,#1B2436,#080B10 70%)}
+[data-s="metal"]{background:
+  repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 1px,rgba(150,158,168,.07) 1px 3px),linear-gradient(180deg,#E4E6E9,#C6CBD1)}
+[data-s="blueprint"]{background:
+  linear-gradient(rgba(120,200,255,.10) 1px,transparent 1px) 0 0/24px 24px,
+  linear-gradient(90deg,rgba(120,200,255,.10) 1px,transparent 1px) 0 0/24px 24px,
+  radial-gradient(90% 90% at 50% 0%,#0E2740,#04101C 75%)}
+[data-s="soft"]{background:radial-gradient(90% 90% at 30% 10%,#F3F5F9,#DCE1E9)}
+/* 玻璃面板 blur */
+[data-m="glass"] .p{backdrop-filter:blur(16px) saturate(140%)}
+[data-m="soft"] .mini,[data-m="soft"] .chip{box-shadow:3px 3px 7px rgba(163,174,192,.6),-3px -3px 7px rgba(255,255,255,.9)}
+[data-m="soft"] .p{border:1px solid rgba(255,255,255,.55)}
+[data-m="metal"] .p{border-top:3px solid transparent;border-image:linear-gradient(90deg,#8E979F,#E8EBEE,#9AA2AA,#DDE1E5) 1}
+[data-m="blueprint"] .p:after{content:'';position:absolute;inset:6px;border:1px solid rgba(120,200,255,.16);border-radius:2px;pointer-events:none}
+[data-m="blueprint"] .p{font-family:'JBMono','Noto Sans SC',monospace}
+[data-m="grain"] .p{box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 30px 60px -30px #000}
+.foot{margin-top:18px;display:flex;justify-content:space-between;font-size:10.5px;color:#8A8D92}
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>排雷兵 · 六种材质</h1>
+  <div class="sub">同一套信息结构，只换"表面质感"：颗粒 / 玻璃 / 砂面 / 金属 / 网格 / 拟物<br>材质可与 A–D 任一配色方向自由组合</div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="foot"><span>全部为纯 CSS / SVG 噪声实现，无图片资源，不增加加载体积</span><span>1300 宽 · 2x 渲染</span></div>
+
+<script>
+const mats = [
+  {m:'paper', s:'paper', idx:'M1', nm:'哑光纸', note:'配 B 判例簿'},
+  {m:'glass', s:'glass', idx:'M2', nm:'磨砂玻璃', note:'配 A 演示大屏'},
+  {m:'grain', s:'grain', idx:'M3', nm:'暗夜细砂', note:'配 A 深空舱'},
+  {m:'metal', s:'metal', idx:'M4', nm:'拉丝钢 · 硬边', note:'配 C 仪表盘'},
+  {m:'blueprint', s:'blueprint', idx:'M5', nm:'蓝图网格', note:'配 C / 技术风'},
+  {m:'soft', s:'soft', idx:'M6', nm:'柔光拟物', note:'配 D 精修版'}
+];
+const panel = `<div class="p">
+  <div class="ph"><span class="t">本轮判级</span><span class="chip">L2 · 定位准确</span><span class="sc">9/12</span></div>
+  <div class="mini-row">
+    <div class="mini"><div class="k">已审查题目</div><div class="v">57</div></div>
+    <div class="mini"><div class="k">平均判级</div><div class="v">L2.4</div></div>
+  </div>
+  <div class="list">
+    <div class="row"><span class="id">MC-20261112-03</span><span class="dir">并发安全</span><span class="st">已完成</span></div>
+    <div class="row"><span class="id">MC-20261112-02</span><span class="dir">边界条件</span><span class="st">已完成</span></div>
+    <div class="row"><span class="id">MC-20261110-09</span><span class="dir">并发安全</span><span class="st w">已中断</span></div>
+  </div>
+  <div class="pf"><span class="sub">需补一条修复后的回归证据</span><button class="btn">继续</button><button class="btn ghost">报告</button></div>
+</div>`;
+document.getElementById('grid').innerHTML = mats.map(o=>`
+  <div class="cell">
+    <div class="cap"><span class="idx">${o.idx}</span><span class="nm">${o.nm}</span><span class="note">${o.note}</span></div>
+    <div class="stage" data-s="${o.s}"><div data-m="${o.m}">${panel}</div></div>
+  </div>`).join('');
+</script>
+</body>
+</html>
+
+
+
+

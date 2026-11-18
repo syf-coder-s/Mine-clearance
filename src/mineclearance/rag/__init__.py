@@ -12,6 +12,7 @@ from .base import (
     RetrievedChunk,
     SealedView,
     as_query,
+    compact_reference,
     make_evidence_id,
     rank_and_cut,
 )
@@ -20,6 +21,9 @@ from .stub import LocalStubRAG
 
 
 def build_retriever(settings) -> Retriever:
+    if settings.rag_provider.strip().lower() == "ragflow":
+        from .ragflow import RagflowRAG
+        return RagflowRAG(settings)
     if not settings.rag_base_url:
         return LocalStubRAG()
     return ResilientRAG(
@@ -39,5 +43,6 @@ __all__ = [
     "build_retriever",
     "make_evidence_id",
     "as_query",
+    "compact_reference",
     "rank_and_cut",
 ]

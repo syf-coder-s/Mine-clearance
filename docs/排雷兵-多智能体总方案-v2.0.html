@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>排雷兵 · 多智能体系统总体方案</title>
+<style>
+  :root{
+    --ink:#1a1d21;
+    --muted:#5f6875;
+    --line:#dbe1e8;
+    --accent:#1f5f8b;
+    --accent2:#8a5a1f;
+    --soft:#f5f8fa;
+    --soft2:#fbf7f1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;padding:44px 20px 80px;background:#eef1f5;color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",-apple-system,sans-serif;
+    font-size:14.5px;line-height:1.82;
+  }
+  .page{max-width:900px;margin:0 auto;background:#fff;padding:54px 58px 66px;
+    box-shadow:0 2px 30px rgba(18,28,42,.10);border-radius:3px;}
+  header{border-bottom:2.5px solid var(--ink);padding-bottom:16px;margin-bottom:8px;}
+  header h1{font-size:27px;margin:0 0 8px;letter-spacing:.3px;line-height:1.35;}
+  header .sub{font-size:14px;color:var(--muted);}
+  header .meta{font-size:12.5px;color:var(--muted);margin-top:10px;}
+  header .meta span{margin-right:20px;white-space:nowrap;}
+
+  h2{font-size:19px;margin:42px 0 12px;padding-left:11px;border-left:4px solid var(--accent);line-height:1.5;}
+  h3{font-size:15.5px;margin:24px 0 7px;color:var(--accent);}
+  h4{font-size:14px;margin:18px 0 5px;color:var(--accent2);}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:23px;}
+  li{margin:4px 0;}
+  code{font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;background:#f3f6f8;
+    padding:1px 5px;border-radius:3px;border:1px solid #e6ebef;color:#243f56;}
+  pre{background:#f7f9fb;border:1px solid var(--line);border-left:3px solid var(--accent);
+    padding:13px 15px;overflow-x:auto;font-size:12.5px;line-height:1.68;border-radius:2px;
+    font-family:"JetBrains Mono",Consolas,monospace;margin:12px 0;}
+  pre code{background:none;border:none;padding:0;}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#f3f6f8;font-weight:600;}
+  td.nw,th.nw{white-space:nowrap;}
+  tbody tr:nth-child(even){background:#fcfdfe;}
+
+  .lead{font-size:15px;background:var(--soft);border-left:3px solid var(--accent);
+    padding:14px 18px;margin:16px 0;border-radius:0 3px 3px 0;}
+  .note{font-size:13px;color:var(--muted);}
+  .warn{background:var(--soft2);border:1px solid #ecdfc9;border-left:3px solid var(--accent2);
+    padding:12px 16px;border-radius:0 3px 3px 0;margin:14px 0;font-size:13.5px;}
+  .warn b{color:var(--accent2);}
+
+  /* 架构图 */
+  .diagram{margin:20px 0 8px;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  .plane{padding:12px 16px 14px;}
+  .plane-head{font-size:12px;letter-spacing:1.2px;color:var(--muted);
+    text-transform:uppercase;margin-bottom:8px;font-weight:600;}
+  .plane.control{background:#eef4f9;}
+  .plane.intel{background:#fff;}
+  .plane.data{background:#f6f8f5;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;}
+  .node{flex:1 1 0;min-width:104px;background:#fff;border:1px solid #cfd9e2;
+    border-radius:3px;padding:8px 9px;font-size:12.5px;text-align:center;line-height:1.45;}
+  .node b{display:block;font-size:13px;margin-bottom:2px;}
+  .node span{color:var(--muted);font-size:11.5px;}
+  .node.hot{border-color:#9cc0da;background:#f7fbfe;}
+  .node.off{border-style:dashed;background:#fafbfc;}
+  .gw{text-align:center;font-size:12px;color:var(--muted);padding:6px 0;
+    background:linear-gradient(90deg,transparent,#e8eef4,transparent);}
+  .legend{font-size:12px;color:var(--muted);margin-top:7px;}
+
+  /* 时序 */
+  .flow{counter-reset:step;margin:14px 0;}
+  .flow .step{position:relative;padding-left:38px;margin:0 0 10px;}
+  .flow .step::before{counter-increment:step;content:counter(step);
+    position:absolute;left:0;top:2px;width:23px;height:23px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:12px;display:flex;
+    align-items:center;justify-content:center;font-weight:600;}
+  .flow .step b{font-size:13.5px;}
+  .flow .step .det{color:var(--muted);font-size:12.5px;display:block;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0;}
+  .card{border:1px solid var(--line);border-radius:3px;padding:13px 15px;background:#fcfdfe;}
+  .card h4{margin-top:0;}
+
+  footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--muted);}
+
+  @media (max-width:720px){
+    .page{padding:32px 22px 44px;}
+    .grid2{grid-template-columns:1fr;}
+    body{padding:16px 8px 48px;}
+  }
+  @media print{
+    body{background:#fff;padding:0;font-size:11pt;}
+    .page{box-shadow:none;padding:0;max-width:none;}
+    h2{page-break-after:avoid;}
+    table,.diagram,.lead,.warn,.flow .step{page-break-inside:avoid;}
+    @page{margin:18mm 16mm;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>排雷兵：多智能体系统总体方案</h1>
+  <div class="sub">生成对抗式代码审查能力训练 · 星型三平面架构</div>
+  <div class="meta">
+    <span>郑州大学首届 AI 智能体创新应用大赛</span>
+    <span>版本 v2.0</span>
+    <span>2026-11</span>
+  </div>
+</header>
+
+<div class="lead">
+  <b>一句话概括：</b>学生不是来问 AI 答案的，是来当审查者的。系统离线造一份带确定缺陷的材料，在线用对抗方把他的判断逼到具体，最后用两级裁判给出 L0–L4 的能力等级。RAGFlow 三库为出题、对抗和裁判提供可追溯的判例参考，但不替代执行证据与最终判定。整场训练在线模型调用硬上限 12 次。
+</div>
+
+<h2>一 · 要解决的问题</h2>
+
+<p>AI 写代码的能力已经超过多数初学者，随之出现一个新的能力断层：<b>学生越来越会生成，越来越不会判断生成物对不对</b>。传统教学让学生「写对」，但没训练他「看出哪里不对」——而这恰恰是 AI 时代最稀缺的能力。</p>
+
+<p>本系统把训练目标从「产出」翻转为「审查」：</p>
+<ul>
+  <li><b>对手不是 AI 的正确答案，而是 AI 的典型缺陷。</b>缺陷类型从逻辑、边界、API 误用、数据泄露、类型混淆、安全、性能到文档不一致，覆盖 8 类。</li>
+  <li><b>评分不看「说对没」，看「说清没」。</b>能感知到有问题只是 L1；定位到具体位置才是 L2；说清触发条件 L3；给出可执行修复 L4；指错方向则判 L0。</li>
+  <li><b>对抗方负责追问，不负责判分。</b>话术可以放开，判分口径锁死在封闭集里，两者物理分离。</li>
+</ul>
+
+<h2>二 · 总体架构：星型三平面</h2>
+
+<p>六个角色之间<b>刻意没有边</b>。所有输入输出都必须经过网关进出，编排权在代码里，不在任何 agent 手里。</p>
+
+<div class="diagram">
+  <div class="plane control">
+    <div class="plane-head">控制面 · 唯一写者</div>
+    <div class="row">
+      <div class="node hot"><b>会话状态机</b><span>open → submit → settle<br>单向，结算后 submit 一律 409</span></div>
+      <div class="node hot"><b>预算守卫</b><span>9 / 1 / 1 / 1<br>先查后花，超限抛异常</span></div>
+      <div class="node hot"><b>审计轨迹</b><span>每次调用留记录<br>阶段 · 档位 · 耗时 · 成本</span></div>
+    </div>
+  </div>
+  <div class="gw">▲ 所有角色只能经网关接收任务、交回结果 ▼</div>
+  <div class="plane intel">
+    <div class="plane-head">智能面 · 六个角色，两段生命周期</div>
+    <div class="row">
+      <div class="node off"><b>出题</b><span>Builder<br>离线 · 0 在线</span></div>
+      <div class="node off"><b>埋雷</b><span>Planter<br>离线 · 0 在线</span></div>
+      <div class="node off"><b>复核</b><span>Probe<br>离线 · 0 在线</span></div>
+      <div class="node hot"><b>对抗</b><span>Adversary<br>在线 · ≤9</span></div>
+      <div class="node hot"><b>裁判</b><span>Judge<br>在线 · 1+1</span></div>
+      <div class="node hot"><b>复盘</b><span>Reporter<br>在线 · 1</span></div>
+    </div>
+  </div>
+  <div class="gw">▲ 只读证据，或按 id 取回，不重新检索 ▼</div>
+  <div class="plane data">
+    <div class="plane-head">数据面 · 一次检索即冻结</div>
+    <div class="row">
+      <div class="node"><b>结构切分</b><span>代码按函数 · 数据按表<br>文章按小节</span></div>
+      <div class="node hot"><b>RAGFlow 三库</b><span>主判例 · 缺陷模式<br>正确代码反例</span></div>
+      <div class="node"><b>检索代理</b><span>召回 → 本地重排<br>过滤 · 去重 · 缓存</span></div>
+      <div class="node"><b>证据快照</b><span>evidence_id 由位置决定<br>可重复核验</span></div>
+      <div class="node"><b>题库 / 结构记忆</b><span>命中即 0 次调用<br>内容指纹去重</span></div>
+    </div>
+  </div>
+</div>
+<div class="legend">实线框 = 在线阶段；虚线框 = 离线阶段，不占 12 次预算。RAGFlow 只提供参考材料，主链仍以探针执行证据为准。控制面是唯一持有可变状态的地方，其余全是冻结对象。</div>
+
+<h3>为什么是星型，不是图</h3>
+<p>多智能体系统最常见的失败不是模型不够强，而是<b>责任不清</b>：谁改了状态、谁花了钱、谁做了最终判断，事后查不出来。星型结构把这三个问题一次性解决：</p>
+<ul>
+  <li><b>状态只有一个写者。</b>会话状态机在后端，agent 只能「提议」下一步，不能自己跳步。</li>
+  <li><b>钱只有一个出口。</b>所有在线调用必须走 <code>Router.call()</code>，它在发请求<b>之前</b>查额度，发完立刻记账。</li>
+  <li><b>判断只有一个来源。</b>抽取表由代码写，不是模型写；模型只能在闭集里选标签。</li>
+</ul>
+<p>代价是灵活性：不能运行时动态建图。但本项目要的是<b>可复现、可验收</b>，不是拓扑搜索——这条取舍写在「不做的事」里。</p>
+
+<h2>三 · 六个角色</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th class="nw">角色</th><th class="nw">时机</th><th>职责</th><th class="nw">在线配额</th><th class="nw">模型档位</th><th>RAG 接入与作用</th><th>输出</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>编排</b><br><span class="note">Session</span></td><td>全程</td>
+      <td>定序、守预算、拼装上下文；<b>不做任何模型调用</b></td>
+      <td class="nw">0</td><td class="nw">—</td>
+      <td>不直接读 RAG；负责把各角色的检索结果纳入会话轨迹和预算账本</td><td>Handle / 轨迹</td>
+    </tr>
+    <tr>
+      <td><b>出题</b><br><span class="note">Builder</span></td><td>离线</td>
+      <td>按出题单写一段<b>本来就正确</b>的材料，自包含、≤40 行、不提前说易错点</td>
+      <td class="nw">0</td><td class="nw">离线</td>
+      <td>主判例库 + 正确代码反例库：参考真实雷型与正确写法，提升题面和初始代码的代表性；不把参考内容直接当成缺陷</td><td>原文</td>
+    </tr>
+    <tr>
+      <td><b>埋雷</b><br><span class="note">Planter</span></td><td>离线</td>
+      <td>只改一处，制造与出题单一致的真实缺陷；给出 diff 与判级提示</td>
+      <td class="nw">0</td><td class="nw">离线</td>
+      <td>主判例库 + 缺陷模式库：按缺陷类型核对埋雷方向，保证只改一处且与判级提示一致</td><td>DefectItem</td>
+    </tr>
+    <tr>
+      <td><b>复核</b><br><span class="note">Probe</span></td><td>离线</td>
+      <td>验「原版通过、埋雷版失败」；不通过则整题剔除，不进评分</td>
+      <td class="nw">0</td><td class="nw">—</td>
+      <td>不依赖 RAG；以原版通过、埋雷版失败的实际运行结果为准，防止知识库误召回造成坏题</td><td>接受 / 剔除 + 理由</td>
+    </tr>
+    <tr>
+      <td><b>对抗</b><br><span class="note">Adversary</span></td><td>在线</td>
+      <td>每轮只做一件事：指出最含糊的一处，要求补一个可核验的细节。<b>不给答案、不判分</b></td>
+      <td class="nw">≤ 9</td><td class="nw">独立一档</td>
+      <td>主判例库 + 缺陷模式库：借助相似案例和典型触发条件选择追问角度，但不直接泄露答案或位置</td><td>一句追问（≤80 字）</td>
+    </tr>
+    <tr>
+      <td><b>裁判</b><br><span class="note">Judge</span></td><td>在线结算</td>
+      <td>决策档吃结构化抽取表回闭集标签；置信度低于阈值才升级读原文</td>
+      <td class="nw">1 + 1</td><td class="nw">决策 / 推理</td>
+      <td>主判例库 + 缺陷模式库 + 正确代码反例库：对照错误模式、正确边界和修复方式，辅助 L0-L4 判级；最终仍以证据和对话为准</td><td>Verdict（标签+等级+引用核验）</td>
+    </tr>
+    <tr>
+      <td><b>复盘</b><br><span class="note">Reporter</span></td><td>在线结算</td>
+      <td>只读结算表写一段 300 字复盘；失败退本地模板，不影响会话</td>
+      <td class="nw">1</td><td class="nw">决策</td>
+      <td>读取本轮 RAG 使用统计：命中库、召回/选中、过滤、去重、参考字符数，说明 RAG 是否真正参与结论</td><td>Markdown 复盘</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <b>上界 12 的来历：</b>对抗 9（3 段 × 3 轮）+ 裁判决策 1 + 裁判升级 1 + 复盘 1 = 12。这不是目标值，是硬上限；<code>STAGE_LIMITS</code> 里任何一个数字变大，都必须同时改申报表。
+</div>
+
+<h2>四 · 一条主链</h2>
+
+<p>拆成 <code>open / submit / settle</code> 三段，同时服务两种用法：Web 端一场会话跨多个请求，学生一轮一轮交；评测与单测用 <code>run()</code> 脚本作答一口气跑完。<b>两套走同一段代码</b>，不存在「演示版」和「评测版」。</p>
+
+<h3>第一段 · 离线准备（0 次在线调用）</h3>
+<div class="flow">
+  <div class="step"><b>取出题单</b><span class="det">先按内容指纹查题库；命中则整条复用（题、证据链、diff 一起拿走），跳过出题与埋雷</span></div>
+  <div class="step"><b>出题</b><span class="det">写一份正确原文，Python 材料末尾带 <code># OK</code> 健康标记</span></div>
+  <div class="step"><b>切分并索引</b><span class="det">代码按函数切、数据按表切、文章按小节切；按函数切是为了不让边界处理与签名分家</span></div>
+  <div class="step"><b>RAGFlow 召回并截断</b><span class="det">从绑定知识库召回 8–12 块；本地按雷型、关键词、相似度重排，过滤冲突雷型并跨文档 SHA256 去重，最后只留 3 段作为证据链（<code>PREPARED_SOURCE = 3</code>）</span></div>
+  <div class="step"><b>埋雷</b><span class="det">只改一处；改后与原版相同、或返回非法结构，直接判失败</span></div>
+  <div class="step"><b>探针复核</b><span class="det">原版必须通过、埋雷版必须失败。任一不满足 → 这道题不进本场评分</span></div>
+  <div class="step"><b>封印索引</b><span class="det">之后只允许按 <code>evidence_id</code> 取回；再写入或再检索直接抛错</span></div>
+</div>
+<p class="note">退场有两种：复核不通过、召回为空。两者都计入 <code>unverified_items</code>，账面按出题单总数算，不允许静默漏记。</p>
+
+<h3>第二段 · 在线对抗（每题 2–3 轮）</h3>
+<div class="flow">
+  <div class="step"><b>下发给学生</b><span class="det">只发埋雷版代码、题面、轮次与证据片段；不发原版、diff、判级提示、锚点</span></div>
+  <div class="step"><b>学生作答</b><span class="det">说出问题在哪、什么输入触发、怎么改、引用了哪几段证据</span></div>
+  <div class="step"><b>对抗追问</b><span class="det">每次 1 次调用，只顶最含糊的一处；Adversary 可读取主判例库与缺陷模式库的封存参考，但不得照抄答案、位置或判级</span></div>
+  <div class="step"><b>提前收束</b><span class="det">预算余量 ≤ 3 时停止追问，把最后 3 次留给结算与复盘</span></div>
+</div>
+
+<h3>第三段 · 结算（3 次）</h3>
+<div class="flow">
+  <div class="step"><b>代码写抽取表</b><span class="det">每道题一行：有没有定位、有没有触发条件、有没有修复、引了哪些证据、推导等级。单写者，模型不参与</span></div>
+  <div class="step"><b>决策档判标签</b><span class="det">只吃这张表，不吃学生原话；回 <code>defect_present / no_defect</code> 二值与置信度</span></div>
+  <div class="step"><b>必要时升级</b><span class="det">挑置信度最低的一道，读原文 + 封存证据 + 整段对话，并对照三库参考；全档允许判 L0。每场最多 1 次</span></div>
+  <div class="step"><b>引用核验</b><span class="det">拿学生标的 id 与封存集比对，本地算 precision / recall，<b>不花调用</b></span></div>
+  <div class="step"><b>复盘</b><span class="det">只读结算表写 300 字；无题可判或调用失败时退本地模板</span></div>
+</div>
+
+<h2>五 · 五条设计铁律</h2>
+
+<div class="grid2">
+  <div class="card">
+    <h4>① 预算可强制执行</h4>
+    <p>12 次不是靠自觉。所有在线调用只有 <code>Router.call()</code> 一个出口，它先 <code>budget.check()</code> 再发请求，发完立刻 <code>record()</code>。想多插一次调用，必须同时改 <code>STAGE_TIER</code> 与 <code>STAGE_LIMITS</code>，绕不过去。</p>
+  </div>
+  <div class="card">
+    <h4>② 切分点选在可判性上</h4>
+    <p>决策档<b>不读学生原话</b>，只吃代码抽取的结构化表——模型对「没有缺陷」的判断天生偏，读到原话就被带跑。只有拿不准时才升级，让读原文的推理档去判。</p>
+  </div>
+  <div class="card">
+    <h4>③ 标签锁死闭集</h4>
+    <p>标签只有「命中 / 未命中」两个取值，没有「部分正确」。模型输出越域条目直接丢弃，不翻译成「接近的合法标签」——翻译等于给越权开口子。丢掉的条目退回本地抽取表直判。</p>
+  </div>
+  <div class="card">
+    <h4>④ 检索一次即冻结</h4>
+    <p><code>seal()</code> 之后 <code>retrieve()</code> 抛错。在线阶段交给裁判和对抗的是 <code>SealedView</code>，它只有 <code>fetch()</code>——「再查一次」在类型层面就写不出来。</p>
+  </div>
+  <div class="card">
+    <h4>⑤ 对抗与裁判不得同源</h4>
+    <p>升级裁判复核的正是对抗方参与过的对话。同一个模型既当质询者又当复核者，等于自己查自己。所以对抗是独立一档，配第二家厂商才算真隔离；只配一家也能跑，但健康检查会如实写 <code>vendor_isolated: false</code>——<b>降级可以，假装做到了不行</b>。</p>
+  </div>
+  <div class="card">
+    <h4>⑥ 坏题绝不判学生</h4>
+    <p>探针复核放在封印之前。雷没埋上、或埋完之后原版也挂了，这道题本身是坏的；拿坏题判学生，学生答对了也会被判错——这是产品最不可原谅的错，宁可少一道题。</p>
+  </div>
+</div>
+
+<h2>六 · 判级口径 L0–L4</h2>
+
+<table>
+  <thead>
+    <tr><th class="nw">等级</th><th class="nw">枚举值</th><th class="nw">rank</th><th>含义</th><th class="nw">判定来源</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><b>L0</b></td><td><code>L0_false_alarm</code></td><td>0</td><td>误报：所指之处经证据核实并无该缺陷，或张冠李戴、把无关写法当雷</td><td>仅升级层</td></tr>
+    <tr><td><b>L1</b></td><td><code>L1_perception</code></td><td>1</td><td>感知到「有问题」，但说不出在哪</td><td>闭表 / 升级层</td></tr>
+    <tr><td><b>L2</b></td><td><code>L2_localization</code></td><td>2</td><td>定位到具体位置，未说明触发条件</td><td>闭表 / 升级层</td></tr>
+    <tr><td><b>L3</b></td><td><code>L3_attribution</code></td><td>3</td><td>定位 + 触发条件，未给修复</td><td>闭表 / 升级层</td></tr>
+    <tr><td><b>L4</b></td><td><code>L4_repair</code></td><td>4</td><td>定位 + 触发 + 可执行修复</td><td>闭表 / 升级层</td></tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <b>为什么 L0 只能由升级层给：</b>抽取表只有三个命中位（定位 / 触发 / 修复），它判得了「学生停在哪一档」，判不了「他说的是不是真的」。三栏全不中可能只是没看出来（L1），不等于误报；而「张冠李戴」在表上与「没看出来」长得一模一样。误报的本质是<b>断言了错误归因</b>，只有看到原文与证据才判得了方向。所以闭表从 L1 起步，L0 留给读原文的升级档。
+  <br><br>
+  代价：纯 L1 学生置信度不低，不会触发升级，也就拿不到 L0。这个取舍是刻意的——把「没看出来」判成「误报」的伤害，远大于「误报漏判」的伤害。
+</div>
+
+<h2>七 · 数据契约</h2>
+
+<p>所有跨角色传递的结构都是冻结数据类，构造时自校验，非法结构在生成处就炸，不会流到下一层。</p>
+
+<table>
+  <thead>
+    <tr><th class="nw">结构</th><th>关键字段</th><th>自校验规则</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ItemSpec</code><br><span class="note">出题单</span></td>
+      <td>item_id / topic / language / defect_type / expected_level</td>
+      <td>按 language + defect_type + expected_level + topic 生成内容指纹，用于题库去重</td>
+    </tr>
+    <tr>
+      <td><code>DefectItem</code><br><span class="note">题</span></td>
+      <td>original / planted / diff / evidence_ids / verified</td>
+      <td>埋雷版必须不同于原版；证据链不能为空；<code>verified</code> 只能由探针复核置真</td>
+    </tr>
+    <tr>
+      <td><code>EvidenceSpan</code><br><span class="note">证据</span></td>
+      <td>evidence_id / doc_id / char_start / char_end / quote</td>
+      <td><code>len(quote) == char_end - char_start</code>，引文与偏移必须精确对上，否则核验无意义</td>
+    </tr>
+    <tr>
+      <td><code>StudentAnswer</code><br><span class="note">作答</span></td>
+      <td>text / cited_evidence_ids / proposed_fix</td>
+      <td>学生产出<b>永不入库</b>：索引接口入参只有 doc_id 与原文，类型上就没有写作答的路径</td>
+    </tr>
+    <tr>
+      <td><code>Verdict</code><br><span class="note">判级</span></td>
+      <td>label / level / confidence / escalated / citation</td>
+      <td>置信度必须在 0–1；等级必须命中 <code>Level</code> 枚举，否则抛错</td>
+    </tr>
+    <tr>
+      <td><code>SessionReport</code><br><span class="note">会话报告</span></td>
+      <td>verdicts / calls / cost / stage_calls / unverified_items / rag_usage</td>
+      <td>调用次数与阶段分布来自预算账本；<code>rag_usage</code> 记录后端状态、各库绑定、召回/选中/过滤/去重和参考字符数</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>证据编号</h4>
+<pre><code>evidence_id = "ev_" + sha256(doc_id + "\x00" + char_start + "\x00" + char_end)[:12]</code></pre>
+<p>编号由<b>位置</b>决定，不由顺序决定。同一份文档重跑一次，同一段证据还是同一个 id；这样学生的引用可以被独立复核，也让题库跨会话复用时能重新绑定。</p>
+
+<h2>八 · 与检索后端的对接</h2>
+
+<p>我方只依赖五个接口，后端可以用任何实现（当前为 RAGFlow 三库 + 题库/结构记忆等业务库）。契约写在 <code>docs/rag-api.md</code>。</p>
+
+<table>
+  <thead>
+    <tr><th class="nw">接口</th><th>语义</th><th>关键约束</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>POST /v1/index</code></td><td>写入一份文档</td><td>幂等覆盖；入参没有「学生作答」字段；封印后必须报错</td></tr>
+    <tr><td><code>POST /v1/retrieve</code></td><td>召回片段</td><td>支持 <code>doc_id</code> 过滤（防止召回别的题的片段）；返回的 <code>len(text)</code> 必须等于区间长度；不做在线改写</td></tr>
+    <tr><td><code>GET /v1/evidence/{id}</code></td><td>按 id 取回</td><td>封印后<b>唯一</b>的读路径</td></tr>
+    <tr><td><code>POST /v1/seal</code></td><td>冻结索引</td><td>封印后 index / retrieve 都必须拒，双保险</td></tr>
+    <tr><td><code>GET /v1/summary</code></td><td>健康与统计（可选）</td><td>用于运维，不在关键路径</td></tr>
+  </tbody>
+</table>
+
+<h4>错误码口径</h4>
+<table>
+  <thead>
+    <tr><th class="nw">场景</th><th class="nw">错误码</th><th>责任方</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>状态非法（如 reserve 缺 stage）</td><td>409</td><td>后端持状态转移表，agent 只提议不改状态</td></tr>
+    <tr><td>越权检索（跨会话 / 锚点外）</td><td>403</td><td>后端做锚点 allowlist，越界显式拒绝而非返回空</td></tr>
+    <tr><td>引用越域（evidence_id 不在封印集）</td><td>422</td><td>后端在入口拒收，不照单全收再算分</td></tr>
+    <tr><td>检索降级 / 真实失败</td><td>—</td><td>降级返回判例；真实失败返回空，主链不断</td></tr>
+  </tbody>
+</table>
+
+<h4>锚点：一场训练只有一份判例集合</h4>
+<ul>
+  <li>「锚点」= 一道题在封印时刻冻结的证据集合，<b>裁判升级与对抗质询吃同一份</b>，不存在两套口径。</li>
+  <li>对抗如需在线检索，范围限定在该题锚点闭集内取 top 块；锚点外返回即越权。</li>
+  <li>锚点在封印后不可增删；要换判例集合 = 重新开局。</li>
+  <li>锚点<b>永不下发给学生</b>：里面有触发条件、修复方案、埋雷位置，随题下发等于把雷标出来。</li>
+</ul>
+
+<h3>RAGFlow 三库绑定与实际作用</h3>
+
+<p>当前部署不是把所有 Agent 接到同一个库，而是按职责绑定不同知识库。三库均通过 RAGFlow API 访问，检索结果先经过本地重排、雷型冲突过滤和跨文档 SHA256 去重，再进入题目锚点；封印后只允许按 <code>evidence_id</code> 读取。</p>
+
+<table>
+  <thead>
+    <tr><th>知识库</th><th>数据集 ID</th><th>主要内容</th><th>接入 Agent</th><th>对结论的实际影响</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>主判例库</b></td>
+      <td><code>ac92d450cbd711f18b868b1ef2314a80</code></td>
+      <td>真实缺陷案例、触发条件、定位方式与修复证据</td>
+      <td>Builder、Planter、Adversary、Judge</td>
+      <td>提供相似案例和证据锚点，帮助出题和追问落到具体触发条件；Judge 用它核对学生归因是否与已知案例一致</td>
+    </tr>
+    <tr>
+      <td><b>缺陷模式库</b></td>
+      <td><code>18193412cbd311f18b8581f2314a80</code></td>
+      <td>雷型定义、典型错误模式、边界和冲突模式</td>
+      <td>Planter、Adversary、Judge</td>
+      <td>约束埋雷方向和对抗问题，过滤与当前题目雷型冲突的召回，减少把别的缺陷误套到本题</td>
+    </tr>
+    <tr>
+      <td><b>正确代码反例库</b></td>
+      <td><code>20e9cf6ccbd711f18b868b1ef2314a80</code></td>
+      <td>正确实现、边界条件和“看起来像错但实际正确”的代码</td>
+      <td>Builder、Judge</td>
+      <td>帮助生成可对照的正确基线，并在裁判阶段降低误报，支持 L0 误报判断而不是只判断“像不像缺陷”</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>检索链路与可观测指标</h4>
+<ol>
+  <li><b>召回：</b>按题目、语言和显式雷型请求对应知识库；主判例库可作为候选召回源，另外两库提供针对性参考。</li>
+  <li><b>重排：</b>本地综合显式雷型、关键词和相似度排序；冲突雷型直接过滤，不把错误案例交给 Agent。</li>
+  <li><b>去重与缓存：</b>跨文档正文 SHA256 去重；默认查询缓存 TTL 为 300 秒，空结果不缓存，代码查询保持大小写敏感，缓存按服务、密钥指纹、查询和知识库隔离。</li>
+  <li><b>冻结：</b>最终选中的参考写入锚点，在线阶段只读；Reporter 汇总请求数、召回数、选中数、平均相似度、缓存命中、过滤数、重复数和实际参考字符数。</li>
+</ol>
+
+<div class="lead">
+  <b>真实联调结果：</b>本地服务 <code>http://localhost:8010/docs</code> 已验证 RAGFlow <code>connected=true</code>。一次完整验证产生 4 次检索请求（主判例库 2 次、缺陷模式库 1 次、正确代码反例库 1 次），最终选中主判例 3 条、缺陷模式 1 条、正确反例 1 条；跨文档去重参考 5 条，过滤错误雷型 5 条，实际发送给 Agent 的参考字符数为 4090。该数据说明 RAG 已进入对抗和裁判上下文，而不是只停留在配置层。
+</div>
+
+<p class="note">RAG 的作用边界：检索结果是参考和证据候选，不是自动判分结果。探针的运行结果、学生引用、结构化抽取表和裁判规则仍是最终判级依据；RAGFlow 不可用时返回空或降级判例，并在报告中显式标记。</p>
+
+<h2>九 · 安全与防作弊</h2>
+
+<div class="grid2">
+  <div class="card">
+    <h4>不整段喂裁判</h4>
+    <p>决策档只吃结构化表。这既是精度设计（避免被学生话术带跑），也避免了「学生写一段长文把判分提示套出来」。</p>
+  </div>
+  <div class="card">
+    <h4>学生产出永不入库</h4>
+    <p>索引接口入参只有 <code>doc_id</code> 与原文。学生自己写的「标准答案」进不了检索库，也就污染不了后续会话。</p>
+  </div>
+  <div class="card">
+    <h4>下发字段白名单</h4>
+    <p>发给学生的包只含：题号、语言、题面、埋雷版代码、轮次、证据片段。<b>没有</b>原版、diff、判级提示、期望等级、锚点。单测用键名白名单 + 禁词双断言守着。</p>
+  </div>
+  <div class="card">
+    <h4>证据结算前不回显</h4>
+    <p>证据原文在结算前一个字都不回显给学生端，只能看到片段提示；完整引文在结算后随判级一起给出。</p>
+  </div>
+  <div class="card">
+    <h4>会话单向</h4>
+    <p>结算后再 submit 一律 409。不能靠「再答一次刷新判分」。</p>
+  </div>
+  <div class="card">
+    <h4>越域即丢弃</h4>
+    <p>模型返回闭集外的标签，条目直接丢弃并退回本地直判，不做「近似翻译」。</p>
+  </div>
+</div>
+
+<h2>十 · 成本与性能</h2>
+
+<table>
+  <thead>
+    <tr><th class="nw">指标</th><th class="nw">目标</th><th>做法</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>在线调用</td><td>硬上限 12 次 / 场</td><td>9 + 1 + 1 + 1；提前收束留 3 次余量；冒烟实测 11 次</td></tr>
+    <tr><td>单场成本</td><td>≤ 0.08 元</td><td>预算守卫同时守次数与金额，任一超限即拒</td></tr>
+    <tr><td>题库命中</td><td>0 次调用</td><td>按内容指纹复用整题；跨会话证据 id 失效时本地重绑，不重新出题</td></tr>
+    <tr><td>结构记忆</td><td>0 次调用</td><td>同型题的历史轮次与追问角度直接查表，只给结构与话术，不含针对本次作答的推断</td></tr>
+    <tr><td>引用核验</td><td>0 次调用</td><td>本地比对 id 集合算 precision / recall</td></tr>
+    <tr><td>RAG 查询缓存</td><td>默认 TTL 300 秒</td><td>按服务、密钥指纹、查询和知识库隔离；空结果不缓存，避免错误结果长期污染</td></tr>
+    <tr><td>RAG 参考字符</td><td>按题目封顶</td><td>只把重排后选中的参考送入 Agent，并在报告中记录实际字符数，防止“检索了但没有用到”</td></tr>
+    <tr><td>离线出题埋雷</td><td>不占在线预算</td><td>出题、埋雷、探针全在离线完成；出错还被下一层兜住</td></tr>
+  </tbody>
+</table>
+
+<p class="note">所有速度优化都落在<b>调用位置</b>上（题库缓存、结构记忆、提前收束、深度 1 预取、按难度伸缩轮次），一个都不在模型层——因为模型是闭源 API，能改的只有调用次数。</p>
+
+<h2>十一 · 可观测与验收</h2>
+
+<h3>健康检查</h3>
+<p><code>GET /v1/health</code> 如实报告：版本号、三档模型名、预算上限、探针类型、检索后端是否降级、厂商隔离是否成立。<b>降级状态必须可见</b>，不允许代码替部署方宣称「已交叉」。</p>
+
+<h3>自动验收</h3>
+<table>
+  <thead>
+    <tr><th class="nw">项</th><th class="nw">当前结果</th><th>覆盖内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>完整测试</td><td>163 项全通过</td><td>契约校验、预算越界、闭集越域、封印、泄漏白名单、L0 通路、召回为空记账、RAG 缓存/重排/统计</td></tr>
+    <tr><td>前端构建</td><td>通过</td><td><code>tsc -b</code> + <code>vite build</code> 产出 68 个模块；产物由后端同源托管，页面直连 <code>/v1</code></td></tr>
+    <tr><td>冒烟脚本</td><td>通过</td><td>一次完整会话的调用轨迹与七项硬检查</td></tr>
+    <tr><td>七项硬检查</td><td>全过</td><td>总数 ≤12、对抗 ≤9、结算 =1、升级 ≤1、复盘 =1、封印生效、无探针题全剔除</td></tr>
+    <tr><td>厂商隔离</td><td>可验</td><td>演练模式也用三个独立实例，隔离机制本身可被测试到</td></tr>
+    <tr><td>RAGFlow 联调</td><td><code>connected=true</code></td><td>三库真实请求、选中、错误雷型过滤、去重和 Agent 参考字符均有统计</td></tr>
+    <tr><td>RAG 贡献可见性</td><td>结算含 <code>rag_usage</code></td><td>Reporter 展示绑定库、请求数、选中数、缓存命中和实际参考字符，能区分“接通”与“实际使用”</td></tr>
+  </tbody>
+</table>
+
+<h3>联调三断言</h3>
+<ol>
+  <li>reserve 缺 <code>stage</code> 字段 → <b>409</b>（不能 200 + 静默补默认值）</li>
+  <li>用 A 会话凭证检索 B 会话 / 锚点外库 → <b>403</b>（不能返回空结果糊弄）</li>
+  <li>judgment 引用的 <code>evidence_id</code> 不在封印集 → <b>422</b>（不能照单全收）</li>
+</ol>
+
+<h2>十二 · 接口一览</h2>
+
+<table>
+  <thead>
+    <tr><th class="nw">方法</th><th class="nw">路径</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>GET</td><td><code>/v1/health</code></td><td>版本、档位、预算上限、探针、检索是否降级</td></tr>
+    <tr><td>POST</td><td><code>/v1/sessions</code></td><td>开局，返回三道题（只有埋雷版）</td></tr>
+    <tr><td>GET</td><td><code>/v1/sessions/{id}</code></td><td>读进度，不花钱</td></tr>
+    <tr><td>POST</td><td><code>/v1/sessions/{id}/submit</code></td><td>提交一轮作答；带 <code>Accept: text/event-stream</code> 走 SSE 流式</td></tr>
+    <tr><td>POST</td><td><code>/v1/sessions/{id}/settle</code></td><td>结算，产出判级、引用核验、复盘与 <code>rag_usage</code> 使用概览</td></tr>
+    <tr><td>POST</td><td><code>/v1/retrieve</code></td><td>预留的检索代理（读方向）</td></tr>
+    <tr><td>GET</td><td><code>/v1/evidence/{id}</code></td><td>按证据编号取回片段</td></tr>
+  </tbody>
+</table>
+
+<p>Web 层只守三件事：下发包是白名单字段、证据原文结算前不回显、会话单向。领域错误带状态码（404 / 409 / 422 / 502），壳里不出现 500 兜底。状态机只依赖标准库，<b>不装 Web 框架也能测</b>。</p>
+
+<h3>学生网页</h3>
+<p>以上接口之上配了一套学生网页（React + Vite，源码在 <code>frontend/</code>）：登录、训练工作台（三栏可调宽，AI 出题与对抗追问逐字输出）、报告、历史、能力分析、系统状态六个页面。部署时在容器内构建，由后端同源托管，页面直接请求 <code>/v1/*</code>，不产生跨域；本机改界面用 <code>npm run dev</code> 连 8010，只看演示数据用 <code>npm run dev:mock</code>。</p>
+
+<h2>十三 · 落地路线</h2>
+
+<table>
+  <thead>
+    <tr><th class="nw">阶段</th><th>交付</th><th class="nw">验收</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>M1</b><br>离线闭环</td>
+      <td>出题 → 埋雷 → 探针复核 → 题库沉淀；用真实模型跑 200 条样本</td>
+      <td>复核通过率、坏题率</td>
+    </tr>
+    <tr>
+      <td><b>M2</b><br>在线闭环</td>
+      <td>三段会话 + 两级裁判 + 复盘；Mock 与真实模型双跑</td>
+      <td>12 次上限、判级一致性</td>
+    </tr>
+    <tr>
+      <td><b>M3</b><br>真实检索</td>
+      <td>接入 RAGFlow 三库与业务库；完成两阶段检索、本地重排、雷型过滤、去重、缓存、封印和锚点越权联调</td>
+      <td>三断言全过；RAGFlow <code>connected=true</code></td>
+    </tr>
+    <tr>
+      <td><b>M4</b><br>标定</td>
+      <td>用自建样本标定升级阈值（当前 0.8），同时观察三库召回、错误雷型过滤和引用命中，冻结后不再调</td>
+      <td>判级与人工标注一致率；RAG 使用统计可追溯</td>
+    </tr>
+    <tr>
+      <td><b>M5</b><br>真实运行</td>
+      <td>本地服务稳定运行，结算响应输出 <code>rag_usage</code>；以真实会话验证 RAG 参考进入 Adversary/Judge 上下文</td>
+      <td>163 项测试全通过；完整联调数据可复核</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>十四 · 不做的事</h2>
+
+<ul>
+  <li><b>不做运行时建图与去中心化路由。</b>本项目的价值在「口径锁定」，不在拓扑搜索；动态建图会让责任链断掉。</li>
+  <li><b>不做 KV 级通信。</b>模型是闭源 API，拿不到 KV，这条路线在工程上不成立。</li>
+  <li><b>不做在线查询改写与多跳检索。</b>一次改写就要再发一次请求，12 次预算扛不住三次。</li>
+  <li><b>不做投机预跑。</b>命中率不足，一半算力白烧，还会让预算账变得不可预测。</li>
+  <li><b>不做「部分正确」这种中间标签。</b>闭集只有命中与未命中；拿不准用置信度表达，不用新标签表达。</li>
+</ul>
+
+<h2>十五 · 风险与对策</h2>
+
+<table>
+  <thead>
+    <tr><th class="nw">风险</th><th>表现</th><th>对策</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>雷埋歪了</td><td>原版也挂，或埋完跑不起来</td>
+      <td>探针在封印前复核「原版通过、埋雷版失败」；不通过整题剔除并计数</td>
+    </tr>
+    <tr>
+      <td>学生套话</td><td>用长文本诱导判分提示或答案</td>
+      <td>决策档只吃结构化表；对抗方系统提示明确禁止给答案与位置</td>
+    </tr>
+    <tr>
+      <td>误判冤枉学生</td><td>把「没看出来」判成「误报」</td>
+      <td>L0 只由读原文的升级层给；闭表从 L1 起步</td>
+    </tr>
+    <tr>
+      <td>对抗与裁判同源</td><td>复核等于自己查自己</td>
+      <td>对抗独立档位；只配一家时健康检查如实报告 <code>vendor_isolated: false</code></td>
+    </tr>
+    <tr>
+      <td>检索后端不可用</td><td>会话开不了局</td>
+      <td>首次失败即降级本地桩；真实失败返回空，主链不断，并在 <code>health</code> 与 <code>rag_usage</code> 中显式标记</td>
+    </tr>
+    <tr>
+      <td>RAG 误召回</td><td>把别的雷型或相似但无关的案例送给 Agent</td>
+      <td>显式雷型过滤 + 关键词/相似度本地重排；过滤数量进入统计，不能静默丢失</td>
+    </tr>
+    <tr>
+      <td>RAG 重复与空结果污染</td><td>重复参考挤占上下文，或空结果被长期缓存</td>
+      <td>正文 SHA256 去重；空结果不缓存；缓存按知识库和密钥指纹隔离</td>
+    </tr>
+    <tr>
+      <td>RAG 只接通未生效</td><td>配置显示已连接，但 Agent 实际没有使用参考</td>
+      <td>结算记录选中数、参考字符数和逐题支持数量；Reporter 直接展示实际使用证据</td>
+    </tr>
+    <tr>
+      <td>预算超支</td><td>模型重试或链路加长</td>
+      <td>先查后花；提前收束留 3 次；成本与次数双闸</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>十六 · 一句话总结</h2>
+
+<p>这套系统的技术含量不在「用了几个 agent」，而在<b>把每一个可能失守的地方都变成了结构约束</b>：预算是异常不是日志，判分是闭集不是自由文本，证据是快照不是再检索，状态是单写者不是协商，误报是升级层的判断不是闭表的猜测，RAG 是按职责绑定并且可量化核验的参考层，不是一个无法追责的公共上下文。</p>
+
+<p>学生带走的不该是「我答对了几道」，而是「我这次的判断停在了哪一级，下一步该练什么」。</p>
+
+<footer>
+  排雷兵项目组 · 郑州大学首届 AI 智能体创新应用大赛<br>
+  代码与契约以仓库为准：<code>src/mineclearance/</code>、<code>docs/rag-api.md</code>、<code>tests/</code>。当前部署：<code>http://localhost:8010/docs</code>；schema <code>1.4.0</code>。
+</footer>
+
+</div>
+</body>
+</html>

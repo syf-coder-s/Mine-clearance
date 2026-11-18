@@ -34,13 +34,14 @@ class Planter:
         self.router = router
         self.probe = probe
 
-    def plant(self, spec: ItemSpec, original: str, evidence_ids: Sequence[str]) -> PlantOutcome:
+    def plant(self, spec: ItemSpec, original: str, evidence_ids: Sequence[str], *, tests: str = "") -> PlantOutcome:
         messages = [
             system(
                 "你是埋雷人。给定一段正确的材料，只改一处，制造一个真实存在的缺陷。"
                 "只输出 JSON：{\"planted\": \"改后全文\", \"diff\": \"改动说明，一到两句\", "
                 "\"rubric_hint\": \"判级提示\"}。不要输出多余文字。"
                 "缺陷类型必须与给定的一致；改动必须能在原文里被定位到。"
+                "保持函数签名、原文的行为约定和语法合法，只改一处行为；禁止 import、文件、网络、反射。"
             ),
             user(
                 "TASK=planter\n"
@@ -73,12 +74,15 @@ class Planter:
             rubric_hint=str(payload.get("rubric_hint", "")).strip(),
             verified=False,
             verify_source="none",
+            test_source=tests,
         )
 
         if self.probe is None:
             return PlantOutcome(item=item, accepted=False, reason="未配置探针，题目不予采用")
 
-        original_result = self.probe.run(original)
+        pair = getattr(self.probe, "verify_pair", None)
+        pair_results = pair(original, planted, tests) if callable(pair) else None
+        original_result = pair_results[0] if pair_results else self.probe.run(original)
         if not original_result.ok:
             return PlantOutcome(
                 item=item,
@@ -87,8 +91,8 @@ class Planter:
                 original_probe=original_result,
             )
 
-        planted_result = self.probe.run(planted)
-        if planted_result.ok:
+        planted_result = pair_results[1] if pair_results else self.probe.run(planted)
+        if planted_result.ok or planted_result.timed_out:
             return PlantOutcome(
                 item=item,
                 accepted=False,

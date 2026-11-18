@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.4.0"
 
 
 class DefectType(str, Enum):
@@ -104,6 +104,10 @@ class DefectItem:
     rubric_hint: str = ""
     verified: bool = False
     verify_source: str = "none"
+    case_evidence_ids: Tuple[str, ...] = ()
+    pattern_evidence_ids: Tuple[str, ...] = ()
+    negative_evidence_ids: Tuple[str, ...] = ()
+    test_source: str = ""
 
     def __post_init__(self) -> None:
         if not self.item_id:
@@ -188,6 +192,7 @@ class SessionReport:
     unverified_items: int
     markdown: str
     stage_calls: Mapping[str, int] = field(default_factory=dict)
+    rag_usage: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -1,3 +1,4 @@
 # 核心链路只用标准库；以下为 Web 接口与真实模型接入所需
 fastapi>=0.110
 uvicorn[standard]>=0.27
+python-dotenv>=1.0,<2

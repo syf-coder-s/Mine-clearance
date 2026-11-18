@@ -36,6 +36,16 @@ from .cache import QuestionBank, StructuralMemory
 # 留给结算与复盘。对抗打到这里就停手，保证 12 次的硬上限不是靠「运气好」守住的。
 RESERVE_CALLS = 3
 PREPARED_SOURCE = 3  # 一道题封存几段证据（召回 8–12，进裁判只留 3）
+DEFECT_RAG_CODES = {
+    "logic": "R06",
+    "boundary": "R02",
+    "api_misuse": "R01",
+    "data_leak": "R07",
+    "type_confusion": "R05",
+    "security": "R08",
+    "perf": "R03",
+    "doc_mismatch": "R06",
+}
 
 
 class AnswerProvider(Protocol):
@@ -173,6 +183,17 @@ class Session:
         markdown = self.reporter.write(
             handle.session_id, verdicts, rounds_by_item=rounds_by_item, budget=handle.budget
         )
+        rag_usage = self._rag_usage(handle.runs)
+        markdown = self._append_rag_summary(markdown, rag_usage)
+        self._log(
+            "RAG 使用概览：主判例绑定 %d 条，缺陷模式 %d 条，正确反例 %d 条；实际参考字符 %d"
+            % (
+                rag_usage["contribution"]["case_references_bound"],
+                rag_usage["contribution"]["pattern_references_bound"],
+                rag_usage["contribution"]["negative_references_bound"],
+                rag_usage["agent_reference_chars"],
+            )
+        )
         handle.settled = True
 
         report = SessionReport(
@@ -184,6 +205,7 @@ class Session:
             unverified_items=handle.rejected,
             markdown=markdown,
             stage_calls=handle.budget.stage_calls(),
+            rag_usage=rag_usage,
         )
         self._log(
             "会话结束：调用 %d/%d 次，成本 %.4f 元，阶段分布 %s"
@@ -225,7 +247,7 @@ class Session:
             cached = self.bank.get(key)
             if cached is not None:
                 self._log("题库命中 %s，跳过出题与埋雷" % spec.item_id)
-                item = self._rebind_evidence(cached)
+                item = self._with_cases(self._rebind_evidence(cached))
                 preparations.append(
                     Preparation(item=item, accepted=item.verified, reason="题库复用", bank_hit=True)
                 )
@@ -244,22 +266,62 @@ class Session:
                 self._log("出题单 %s 召回为空，无法建证据链" % spec.item_id)
                 continue
 
-            outcome = self.planter.plant(spec, original, evidence_ids)
+            outcome = self.planter.plant(spec, original, evidence_ids, tests=self.builder.contracts.get(spec.item_id, ""))
+            self._log("%s 独立测试：原版=%s；埋雷版=%s" % (
+                spec.item_id, outcome.original_probe, outcome.planted_probe))
             self._log(
                 "埋雷 %s：%s（%s）"
                 % (spec.item_id, "通过" if outcome.accepted else "剔除", outcome.reason)
             )
             if outcome.accepted:
-                self.bank.put(outcome.item, key=key)
+                prepared_item = self._with_cases(outcome.item)
+                self.bank.put(prepared_item, key=key)
+            else:
+                prepared_item = outcome.item
             preparations.append(
                 Preparation(
-                    item=outcome.item,
+                    item=prepared_item,
                     accepted=outcome.accepted,
                     reason=outcome.reason,
                     bank_hit=False,
                 )
             )
         return preparations
+
+    def _with_cases(self, item: DefectItem) -> DefectItem:
+        prepare = getattr(self.retriever, "prepare_cases", None)
+        if not callable(prepare):
+            return item
+        primary_query = as_query(item.title, item.defect_type.value, item.language)
+        defect_query = as_query(
+            item.diff,
+            item.defect_type.value,
+            item.language,
+            context=item.rubric_hint,
+        )
+        try:
+            case_ids = prepare(primary_query, alternate_queries=(defect_query,))
+        except TypeError:
+            # 兼容只实现旧 prepare_cases(query) 的本地/第三方检索器。
+            case_ids = prepare(primary_query)
+        self._log("%s 封存 %d 条真实判例参考" % (item.item_id, len(case_ids)))
+        auxiliary = getattr(self.retriever, "prepare_auxiliary", None)
+        if not callable(auxiliary):
+            return replace(item, case_evidence_ids=case_ids)
+        references = auxiliary(
+            " ".join((primary_query, defect_query)),
+            expected_code=DEFECT_RAG_CODES.get(item.defect_type.value, ""),
+        )
+        pattern_ids = tuple(references.get("patterns", ()))
+        negative_ids = tuple(references.get("negative_code", ()))
+        self._log("%s 辅助参考：缺陷模式=%d，正确反例=%d" % (
+            item.item_id, len(pattern_ids), len(negative_ids)))
+        return replace(
+            item,
+            case_evidence_ids=case_ids,
+            pattern_evidence_ids=pattern_ids,
+            negative_evidence_ids=negative_ids,
+        )
 
     def _rebind_evidence(self, item: DefectItem) -> DefectItem:
         """题库里的题带着旧 id。重新索引一遍原文，把证据链重新绑到本次索引上。"""
@@ -295,6 +357,73 @@ class Session:
         else:
             base = 2 if item.expected_level.rank <= Level.L2.rank else 3
         return max(self.settings.min_rounds, min(self.settings.max_rounds, base))
+
+    def _rag_usage(self, runs: Sequence[ItemRun]) -> dict:
+        """只输出 RAG 参与度统计，不把共享判例正文或证据编号暴露到报告。"""
+        summary_fn = getattr(self.retriever, "summary", None)
+        raw_summary = summary_fn() if callable(summary_fn) else {}
+        if not isinstance(raw_summary, dict):
+            raw_summary = {}
+        items = []
+        case_bound = pattern_bound = negative_bound = 0
+        items_with_cases = items_with_auxiliary = 0
+        for run in runs:
+            case_count = len(tuple(run.item.case_evidence_ids))
+            pattern_count = len(tuple(getattr(run.item, "pattern_evidence_ids", ())))
+            negative_count = len(tuple(getattr(run.item, "negative_evidence_ids", ())))
+            case_bound += case_count
+            pattern_bound += pattern_count
+            negative_bound += negative_count
+            if case_count:
+                items_with_cases += 1
+            if pattern_count or negative_count:
+                items_with_auxiliary += 1
+            items.append({
+                "item_id": run.item.item_id,
+                "case_references": case_count,
+                "pattern_references": pattern_count,
+                "negative_references": negative_count,
+                "has_rag_support": bool(case_count or pattern_count or negative_count),
+            })
+        retrieval_stats = raw_summary.get("retrieval_stats", {})
+        quality_stats = raw_summary.get("quality_stats", {})
+        return {
+            "backend": raw_summary.get("backend", type(self.retriever).__name__),
+            "connected": raw_summary.get("connected"),
+            "degraded": raw_summary.get("degraded", False),
+            "retrieval_requests": raw_summary.get("retrieval_requests", 0),
+            "case_query_count": raw_summary.get("case_query_count", 0),
+            "retrieval_stats": retrieval_stats if isinstance(retrieval_stats, dict) else {},
+            "quality_stats": quality_stats if isinstance(quality_stats, dict) else {},
+            "agent_reference_chars": int(quality_stats.get("agent_reference_chars", 0) or 0)
+            if isinstance(quality_stats, dict) else 0,
+            "contribution": {
+                "case_references_bound": case_bound,
+                "pattern_references_bound": pattern_bound,
+                "negative_references_bound": negative_bound,
+                "items_with_cases": items_with_cases,
+                "items_with_auxiliary": items_with_auxiliary,
+                "items_total": len(items),
+            },
+            "items": items,
+        }
+
+    @staticmethod
+    def _append_rag_summary(markdown: str, rag_usage: dict) -> str:
+        contribution = rag_usage["contribution"]
+        return (
+            markdown.rstrip()
+            + "\n\n## RAG 使用概览\n\n"
+            + "- 后端：%s；检索请求：%d；最终绑定主判例：%d 条。\n"
+            % (rag_usage["backend"], rag_usage["retrieval_requests"], contribution["case_references_bound"])
+            + "- 缺陷模式：%d 条；正确反例：%d 条；实际送入 Agent 的参考字符：%d。\n"
+            % (
+                contribution["pattern_references_bound"],
+                contribution["negative_references_bound"],
+                rag_usage["agent_reference_chars"],
+            )
+            + "- 这部分只作为审查口径参考，不替代本题代码证据。"
+        )
 
     def _log(self, message: str) -> None:
         self.trace.append(message)

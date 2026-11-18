@@ -33,6 +33,14 @@ class Settings:
     llm_api_key: str = ""
     decision_model: str = "mock-decision"
     reasoning_model: str = "mock-reasoning"
+    builder_api_base: str = ""
+    builder_api_key: str = ""
+    builder_model: str = ""
+    builder_auth_header: str = "Authorization"
+    adversary_auth_header: str = "Authorization"
+    llm_timeout_s: float = 120.0
+    llm_max_tokens: int = 4096
+    llm_audit_dir: str = ""
 
     # 对抗方单独一家，理由见编排文档表 9 第七行：禁止同一模型既当对抗又当裁判。
     # 升级裁判要复核的就是对抗方参与过的对话，同源时这次复核等于自己查自己。
@@ -47,6 +55,23 @@ class Settings:
     rag_timeout_s: float = 2.0
     rag_top_k: int = 10
     rag_judge_top_k: int = 3
+    # 判例库独立于本题原始代码，不能把判例里的代码当作本题事实。
+    rag_provider: str = "contract"
+    ragflow_base_url: str = ""
+    ragflow_api_key: str = ""
+    ragflow_dataset_id: str = ""
+    ragflow_pattern_dataset_id: str = ""
+    ragflow_negative_dataset_id: str = ""
+    ragflow_timeout_s: float = 15.0
+    ragflow_cache_ttl_s: float = 300.0
+    case_top_k: int = 3
+    case_candidate_k: int = 10
+    case_min_similarity: float = 0.1
+    pattern_candidate_k: int = 4
+    pattern_min_similarity: float = 0.25
+    negative_candidate_k: int = 4
+    negative_min_similarity: float = 0.25
+    case_snapshot_dir: str = "data/case_snapshots"
 
     # 裁决层（状态机 / 两段式预算 / 锚点）。留空 = 内存实现 FakeUpstream，
     # 七个端点照常可用；填上就整体切到 HttpUpstream，不做半截降级。
@@ -76,6 +101,14 @@ class Settings:
             llm_api_key=os.getenv("LLM_API_KEY", ""),
             decision_model=os.getenv("DECISION_MODEL", "mock-decision"),
             reasoning_model=os.getenv("REASONING_MODEL", "mock-reasoning"),
+            builder_api_base=os.getenv("BUILDER_API_BASE", ""),
+            builder_api_key=os.getenv("BUILDER_API_KEY", ""),
+            builder_model=os.getenv("BUILDER_MODEL", ""),
+            builder_auth_header=os.getenv("BUILDER_AUTH_HEADER", "Authorization"),
+            adversary_auth_header=os.getenv("ADVERSARY_AUTH_HEADER", "Authorization"),
+            llm_timeout_s=_get_float("LLM_TIMEOUT_S", 120.0),
+            llm_max_tokens=_get_int("LLM_MAX_TOKENS", 4096),
+            llm_audit_dir=os.getenv("LLM_AUDIT_DIR", ""),
             adversary_api_base=os.getenv("ADVERSARY_API_BASE", ""),
             adversary_api_key=os.getenv("ADVERSARY_API_KEY", ""),
             adversary_model=os.getenv("ADVERSARY_MODEL", ""),
@@ -84,6 +117,22 @@ class Settings:
             rag_timeout_s=_get_float("RAG_TIMEOUT_S", 2.0),
             rag_top_k=_get_int("RAG_TOP_K", 10),
             rag_judge_top_k=_get_int("RAG_JUDGE_TOP_K", 3),
+            rag_provider=os.getenv("RAG_PROVIDER", "contract"),
+            ragflow_base_url=os.getenv("RAGFLOW_BASE_URL", ""),
+            ragflow_api_key=os.getenv("RAGFLOW_API_KEY", ""),
+            ragflow_dataset_id=os.getenv("RAGFLOW_DATASET_ID", ""),
+            ragflow_pattern_dataset_id=os.getenv("RAGFLOW_PATTERN_DATASET_ID", ""),
+            ragflow_negative_dataset_id=os.getenv("RAGFLOW_NEGATIVE_DATASET_ID", ""),
+            ragflow_timeout_s=_get_float("RAGFLOW_TIMEOUT_S", 15.0),
+            ragflow_cache_ttl_s=_get_float("RAGFLOW_CACHE_TTL_S", 300.0),
+            case_top_k=_get_int("CASE_TOP_K", 3),
+            case_candidate_k=_get_int("CASE_CANDIDATE_K", 10),
+            case_min_similarity=_get_float("CASE_MIN_SIMILARITY", 0.1),
+            pattern_candidate_k=_get_int("PATTERN_CANDIDATE_K", 4),
+            pattern_min_similarity=_get_float("PATTERN_MIN_SIMILARITY", 0.25),
+            negative_candidate_k=_get_int("NEGATIVE_CANDIDATE_K", 4),
+            negative_min_similarity=_get_float("NEGATIVE_MIN_SIMILARITY", 0.25),
+            case_snapshot_dir=os.getenv("CASE_SNAPSHOT_DIR", "data/case_snapshots"),
             upstream_base_url=os.getenv("UPSTREAM_BASE_URL", ""),
             upstream_api_key=os.getenv("UPSTREAM_API_KEY", ""),
             upstream_timeout_s=_get_float("UPSTREAM_TIMEOUT_S", 3.0),

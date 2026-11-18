@@ -10,6 +10,13 @@
 from __future__ import annotations
 
 from typing import Dict, Mapping, Optional, Sequence
+from urllib.parse import urlsplit
+import time
+import json
+import os
+import uuid
+from pathlib import Path
+from dataclasses import asdict
 
 from ..config import Settings
 from ..budget import CallBudget
@@ -30,7 +37,7 @@ STAGE_TIER: Dict[str, str] = {
 
 
 class Router:
-    def __init__(self, clients: Mapping[str, LLMClient], *, vendor_isolated: bool = True) -> None:
+    def __init__(self, clients: Mapping[str, LLMClient], *, vendor_isolated: bool = True, audit_dir: str = "") -> None:
         if not clients:
             raise ValueError("至少需要一档模型")
         self._clients: Dict[str, LLMClient] = dict(clients)
@@ -39,6 +46,37 @@ class Router:
         self.vendor_isolated = vendor_isolated
         self.offline_calls = 0
         self.offline_cost_cny = 0.0
+        self.audit = []  # 仅服务端持有，含答案的提示词不经学生接口下发。
+        self.audit_path = Path(audit_dir) / (uuid.uuid4().hex + ".json") if audit_dir else None
+
+    def _save_audit(self):
+        if self.audit_path is not None:
+            self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.audit_path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(self.audit, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary, self.audit_path)
+
+    def _complete(self, stage, tier, messages, *, case_evidence_ids=(), **kwargs):
+        client = self.client_for(tier)
+        entry = {"stage": stage, "tier": tier,
+                 "provider": urlsplit(getattr(client, "api_base", "")).hostname or "mock",
+                 "model": getattr(client, "model", getattr(client, "name", "unknown")),
+                 "messages": [dict(m) for m in messages], "status": "pending"}
+        prompt_text = "\n".join(m["content"] for m in messages)
+        entry["case_evidence_ids"] = [eid for eid in case_evidence_ids if "[" + eid + "]" in prompt_text]
+        self.audit.append(entry)
+        started = time.monotonic()
+        try:
+            response = client.complete(messages, tier=tier, **kwargs)
+            entry.update(asdict(response))
+            entry["status"] = "ok"
+            self._save_audit()
+            return response
+        except Exception as exc:
+            entry.update(status="failed", error=type(exc).__name__,
+                         latency_ms=int((time.monotonic() - started) * 1000))
+            self._save_audit()
+            raise
 
     def client_for(self, tier: str) -> LLMClient:
         client = self._clients.get(tier)
@@ -54,6 +92,7 @@ class Router:
         budget: CallBudget,
         temperature: float = 0.2,
         on_token: TokenCallback = None,
+        case_evidence_ids: Sequence[str] = (),
     ) -> LLMResponse:
         """一次在线调用 = 一次记账。先查额度，再花钱。"""
         tier = STAGE_TIER.get(stage)
@@ -63,9 +102,12 @@ class Router:
                 % stage
             )
         budget.check(stage)
-        response = self.client_for(tier).complete(
-            messages, tier=tier, temperature=temperature, on_token=on_token
-        )
+        try:
+            response = self._complete(stage, tier, messages, temperature=temperature, on_token=on_token,
+                                      case_evidence_ids=case_evidence_ids)
+        except Exception:
+            budget.record(stage, tier, self.audit[-1]["model"], self.audit[-1]["latency_ms"], 0.0)
+            raise
         budget.record(stage, tier, response.model, response.latency_ms, response.cost_cny)
         return response
 
@@ -78,8 +120,10 @@ class Router:
         temperature: float = 0.4,
     ) -> LLMResponse:
         """离线阶段（出题、埋雷）。不占在线预算，单独计数。"""
-        response = self.client_for(tier).complete(messages, tier=tier, temperature=temperature)
+        if stage == "builder" and "builder" in self._clients:
+            tier = "builder"
         self.offline_calls += 1
+        response = self._complete(stage, tier, messages, temperature=temperature)
         self.offline_cost_cny = round(self.offline_cost_cny + response.cost_cny, 6)
         return response
 
@@ -88,6 +132,9 @@ class Router:
             "offline_calls": self.offline_calls,
             "offline_cost_cny": self.offline_cost_cny,
             "vendor_isolated": self.vendor_isolated,
+            "cost_known": bool(self.audit) and all(a.get("cost_known", False) for a in self.audit),
+            "model_routes": {stage: getattr(self.client_for(tier), "model", "mock")
+                             for stage, tier in {**STAGE_TIER, "builder": "builder" if "builder" in self._clients else "reasoning", "planter": "reasoning"}.items() if tier in self._clients},
         }
 
 
@@ -117,23 +164,39 @@ def build_router(settings: Settings) -> Router:
             model=settings.decision_model,
             api_base=settings.llm_api_base,
             api_key=settings.llm_api_key,
+            timeout_s=settings.llm_timeout_s,
+            max_tokens=settings.llm_max_tokens,
         ),
         "reasoning": OpenAICompatLLM(
             model=settings.reasoning_model,
             api_base=settings.llm_api_base,
             api_key=settings.llm_api_key,
+            timeout_s=settings.llm_timeout_s,
+            max_tokens=settings.llm_max_tokens,
         ),
     }
+
+    if settings.builder_api_base:
+        clients["builder"] = OpenAICompatLLM(
+            model=settings.builder_model or settings.reasoning_model,
+            api_base=settings.builder_api_base, api_key=settings.builder_api_key,
+            auth_header=settings.builder_auth_header, timeout_s=settings.llm_timeout_s,
+            max_tokens=settings.llm_max_tokens,
+        )
 
     if settings.adversary_api_base:
         clients["adversary"] = OpenAICompatLLM(
             model=settings.adversary_model or settings.reasoning_model,
             api_base=settings.adversary_api_base,
             api_key=settings.adversary_api_key,
+            auth_header=settings.adversary_auth_header,
+            timeout_s=settings.llm_timeout_s,
+            max_tokens=settings.llm_max_tokens,
         )
-        return Router(clients, vendor_isolated=True)
+        isolated = urlsplit(settings.adversary_api_base).hostname != urlsplit(settings.llm_api_base).hostname
+        return Router(clients, vendor_isolated=isolated, audit_dir=settings.llm_audit_dir)
 
     # 只配了一家厂商：宁可复用也不要中断会话（现场演示不能因为少一个 key 就开不了局），
     # 但隔离不成立这件事必须能被看到，不能由代码替部署方宣称「已交叉」。
     clients["adversary"] = clients["reasoning"]
-    return Router(clients, vendor_isolated=False)
+    return Router(clients, vendor_isolated=False, audit_dir=settings.llm_audit_dir)

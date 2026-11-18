@@ -56,6 +56,9 @@ class QuestionBank:
                 rubric_hint=entry.get("rubric_hint", ""),
                 verified=entry.get("verified", False),
                 verify_source=entry.get("verify_source", "none"),
+                pattern_evidence_ids=tuple(entry.get("pattern_evidence_ids", ())),
+                negative_evidence_ids=tuple(entry.get("negative_evidence_ids", ())),
+                test_source=entry.get("test_source", ""),
             )
             self._items[entry.get("key") or item.fingerprint()] = item
 
@@ -68,7 +71,7 @@ class QuestionBank:
             payload["key"] = key
             items.append(payload)
         self.path.write_text(
-            json.dumps({"version": 1, "items": items}, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps({"version": 2, "items": items}, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
 

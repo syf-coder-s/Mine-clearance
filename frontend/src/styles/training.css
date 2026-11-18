@@ -1,0 +1,222 @@
+/* ============================================================
+   训练工作台：代码面板 / 对抗消息 / 题目导航 / 证据
+   ============================================================ */
+
+/* ---------- 代码面板 ---------- */
+.code-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-hair);
+  flex-shrink: 0;
+}
+.win-dots { display: inline-flex; gap: 4px; margin-right: 2px; }
+.win-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); }
+.win-dots i:nth-child(1) { background: #EFC7C2; }
+.win-dots i:nth-child(2) { background: #EFDDB8; }
+.win-dots i:nth-child(3) { background: #C7E2D2; }
+
+.code-file { font-family: var(--font-mono); font-size: 12px; color: var(--text-main); font-weight: 500; }
+.code-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); letter-spacing: 0.02em; }
+
+.code-body {
+  flex: 1;
+  overflow: auto;
+  background: var(--code-bg);
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+.code-body pre {
+  margin: 0;
+  padding: 8px 0 16px;
+  font-family: var(--font-mono);
+  color: var(--code-ink);
+  min-width: max-content;
+}
+.code-line { display: flex; position: relative; }
+.code-line:hover { background: rgba(49, 87, 221, 0.035); }
+.code-line .gutter {
+  width: 46px;
+  flex: 0 0 46px;
+  text-align: right;
+  padding-right: 14px;
+  color: var(--code-gutter);
+  user-select: none;
+}
+.code-line .src { padding-right: 24px; white-space: pre; }
+.code-line.is-sel { background: var(--code-sel); }
+.code-line.is-hl { background: var(--code-hl); box-shadow: inset 2px 0 0 var(--danger); }
+
+/* ---------- 对抗消息 ---------- */
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat-empty {
+  margin: auto 0;
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.chat-row { display: flex; gap: 8px; align-items: flex-start; }
+.chat-row.mine { flex-direction: row-reverse; }
+.chat-ava {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-line);
+}
+.chat-row.mine .chat-ava { background: var(--bg-elev); color: var(--text-secondary); border-color: var(--border); }
+.chat-col { max-width: 82%; min-width: 0; }
+.chat-round { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 4px; }
+.chat-row.mine .chat-round { text-align: right; }
+.chat-bubble {
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+.chat-row.mine .chat-bubble { background: var(--primary-soft); border-color: var(--primary-line); }
+.chat-bubble.sys { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+.chat-typing { display: flex; align-items: center; gap: 8px; color: var(--text-tertiary); font-size: 12.5px; }
+
+/* ---------- 打字机 / 思考中动画 ---------- */
+/* 逐字输出尾部光标 */
+.type-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--primary);
+  animation: type-caret-blink 0.8s steps(1) infinite;
+}
+@keyframes type-caret-blink { 50% { opacity: 0; } }
+
+/* 「思考中」三点跳动 */
+.typing-dots { display: inline-flex; gap: 3px; align-items: center; }
+.typing-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.45;
+  animation: typing-dot-bounce 1.2s ease-in-out infinite;
+}
+.typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .type-cursor { animation: none; }
+  .typing-dots i { animation: none; opacity: 0.7; }
+}
+
+/* ---------- 三栏拖拽分隔条 ---------- */
+.col-resizer {
+  flex: 0 0 16px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.col-resizer::after {
+  content: '';
+  width: 3px;
+  height: 48px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+.col-resizer:hover::after { background: var(--primary); height: 64px; }
+
+/* ---------- 题目导航 ---------- */
+.qnav-list { display: flex; flex-direction: column; gap: 6px; }
+.qnav-item {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 11px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease,
+    border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.qnav-item:hover { transform: translateX(2px); border-color: var(--primary-line); background: var(--bg-hover); }
+.qnav-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-soft), 0 0 0 5px var(--primary); }
+.qnav-item.is-current {
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-hover) 100%);
+  border-color: var(--primary-active);
+  color: var(--text-inverse);
+  box-shadow: 0 8px 18px -8px rgba(49, 87, 221, 0.55);
+}
+.qnav-title { color: var(--text-main); }
+.qnav-id { color: var(--text-tertiary); }
+.qnav-rounds { color: var(--text-secondary); }
+.qnav-item.is-current .qnav-title,
+.qnav-item.is-current .qnav-id,
+.qnav-item.is-current .qnav-rounds { color: var(--text-inverse); }
+.qnav-item.is-current .qnav-id,
+.qnav-item.is-current .qnav-rounds { opacity: 0.85; }
+.qnav-mark {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+.qnav-item.is-current .qnav-mark { border-color: rgba(255, 255, 255, 0.7); color: var(--text-inverse); background: rgba(255, 255, 255, 0.18); }
+.qnav-item.is-done .qnav-mark { border-color: var(--success-line); color: var(--success); background: var(--success-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qnav-item:hover { transform: none; }
+}
+
+/* ---------- 证据 ---------- */
+.evidence-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-card);
+  font-size: 12px;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.evidence-row:hover { border-color: var(--primary-line); box-shadow: 0 4px 12px -6px rgba(49, 87, 221, 0.3); }
+.evidence-row.is-cited { border-color: var(--primary-line); background: var(--primary-soft); }
+.evidence-id { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); letter-spacing: 0.02em; }

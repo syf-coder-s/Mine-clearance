@@ -45,6 +45,8 @@ class LocalStubRAG:
             raise IndexSealed("索引已封印，不能再写入文档: %s" % doc_id)
         if not doc_id:
             raise RAGError("doc_id 不能为空")
+        for old_id in self._by_doc.pop(doc_id, []):
+            self._chunks.pop(old_id, None)
         spans = chunking.split(text, language)
         stored = 0
         for start, end in spans:

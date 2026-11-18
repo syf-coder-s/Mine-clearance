@@ -1,5 +1,7 @@
 # 排雷兵 · Mine-clearance
 
+本机 Docker 部署与原生 RAGFlow 判例库接入见 [本地部署说明](docs/local-deployment.md)。当前本机使用真实判例检索和 MiMo / DeepSeek 分工模型，接口文档地址为 http://localhost:8010/docs。离线冒烟仍用 Mock。
+
 面向「AI 生成代码审查能力训练」的多智能体编排框架。学生是对手，系统负责出雷、陪着辩、最后判级。
 
 本仓库是**编排层**的代码骨架，配套《排雷兵》主方案与《编排实现文档》。当前状态：全链路可离线跑通（Mock 模型 + 本地 RAG 桩）；真实模型与真实 RAG 服务通过配置接入，调用方代码不改。
@@ -10,7 +12,7 @@
 
 离线建设（生成、埋雷、封印证据）不占在线预算；在线只跑「学生审 → 对抗 2 至 3 轮」的环，三段之后一次结算。所有速度优化都在调用位置上（题库缓存、逐项流式、深度 1 预取、按难度伸缩轮次），一个都不在模型层。
 
-## 四个角色
+## 五个角色
 
 | 角色 | 在哪 | 每次会话的模型调用 |
 |---|---|---|
@@ -66,11 +68,18 @@ LLM_API_KEY=sk-xxx
 DECISION_MODEL=<小模型>
 REASONING_MODEL=<推理档模型>
 
+# Builder 可单独配置 MiMo（api-key 头）
+BUILDER_API_BASE=https://api.xiaomimimo.com/v1
+BUILDER_API_KEY=
+BUILDER_MODEL=mimo-v2.6-flash
+BUILDER_AUTH_HEADER=api-key
+
 # 对抗方单独一家。留空则复用推理档，会话照常跑，
 # 但 /v1/health 的 vendor_isolated 会是 false——复核等于自己查自己。
 ADVERSARY_API_BASE=
 ADVERSARY_API_KEY=
 ADVERSARY_MODEL=
+ADVERSARY_AUTH_HEADER=Authorization
 ```
 
 `llm/router.py` 负责按档位分发。决策层只吃抽取出来的结构化表，不吃学生的原始文本；这是精度设计，不是省钱设计。
@@ -80,6 +89,8 @@ ADVERSARY_MODEL=
 ## 接入 RAG
 
 `RAG_BASE_URL` 留空时自动落到本地桩 `StubRAG`，用于开发和测试。填写后走 HTTP，契约见 `docs/rag-api.md`。
+
+原生 RAGFlow 判例库使用“两段式检索”：先召回 `CASE_CANDIDATE_K` 条候选，再在本地按显式缺陷类型、关键词和向量相似度重排，最终给 Agent `CASE_TOP_K` 条。重排只读候选，不修改共享库；健康接口会返回 `case_rerank` 统计。
 
 三个接入点里只有裁判核验在关键路径上，且只按 `evidence_id` 取回，不发起新检索。索引一旦 `seal()`，再写就抛 `IndexSealed`，这条规则写死在代码里。
 

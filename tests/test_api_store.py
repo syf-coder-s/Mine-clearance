@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from mineclearance.api.store import (  # noqa: E402
     Sealed,
+    EvidenceForbidden,
     SessionClosed,
     SessionNotFound,
     SessionStore,
@@ -110,6 +111,9 @@ class LeakTest(unittest.TestCase):
     def test_evidence_is_citable_before_it_is_readable(self):
         # 开局只给编号不给原文，但编号必须真能引用——否则学生无从「用证据说话」。
         evidence_id = self.opened["items"][0]["evidence"][0]["evidence_id"]
+        with self.assertRaises(EvidenceForbidden):
+            self.store.evidence(evidence_id, session_id=self.opened["session_id"])
+        self.store.settle(self.opened["session_id"])
         span = self.store.evidence(evidence_id, session_id=self.opened["session_id"])
         self.assertTrue(span["quote"])
 
@@ -219,6 +223,10 @@ class FullSessionTest(unittest.TestCase):
 
     def test_report_has_a_human_readable_part(self):
         self.assertTrue(self.report["markdown"].strip())
+        self.assertIn("RAG 使用概览", self.report["markdown"])
+        self.assertIn("rag_usage", self.report)
+        self.assertEqual(self.report["rag_usage"]["contribution"]["items_total"], 3)
+        self.assertNotIn("case_evidence_ids", self.report["rag_usage"])
         self.assertEqual(self.report["unverified_items"], 0)
         self.assertTrue(self.report["trace"], "调用轨迹要能解释这 11 次花在哪")
 
@@ -244,6 +252,7 @@ class RagProxyTest(unittest.TestCase):
 
     def test_evidence_proxy_returns_the_sealed_span(self):
         evidence_id = self.opened["items"][0]["evidence"][0]["evidence_id"]
+        self.store.settle(self.session_id)
         span = self.store.evidence(evidence_id, session_id=self.session_id)
         self.assertEqual(span["evidence_id"], evidence_id)
         self.assertTrue(span["quote"])

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import difflib
 import os
 import threading
 import time
@@ -21,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence
 
 from ..agents import MarkerProbe, Probe, PYTEST_PROBE
+from ..agents.pure_probe import PurePythonProbe
 from ..config import DEFAULT_SETTINGS, Settings
 from ..llm import Router, build_router
 from ..orchestration import QuestionBank, Session
@@ -74,6 +76,14 @@ class UpstreamError(StoreError):
     status = 502
 
 
+class EvidenceForbidden(StoreError):
+    status = 403
+
+
+class CitationOutsideAnchor(StoreError):
+    status = 422
+
+
 @dataclass
 class _Entry:
     session_id: str
@@ -84,6 +94,61 @@ class _Entry:
     created: float
     touched: float
     lock: threading.RLock = field(default_factory=threading.RLock)
+
+
+def map_span_to_planted(original: str, planted: str, char_start: int, char_end: int) -> tuple:
+    """把 original 里的字符区间映射到 planted 的行区间。
+
+    证据 span 的 char_start/char_end 是**原版代码**里的字符偏移，而发给学生的
+    是埋雷版：埋雷会把行改坏、还可能多出几行，原版偏移直接切埋雷版必然错位。
+    这里先按换行求原版 0-based 行号（闭区间），再用 SequenceMatcher 建
+    「原版行号 → 埋雷版行号」映射，最后从埋雷版里取对应行的文本当 excerpt。
+    任何一步对不上都退化为 (0, 0, "")——绝不拿原版的行给学生看。
+
+    行号为 1-based、闭区间；映射失败返回 (0, 0, "")。
+    """
+    try:
+        if not original or not planted:
+            return (0, 0, "")
+        if char_start < 0 or char_end < char_start or char_start >= len(original):
+            return (0, 0, "")
+        orig_lines = original.splitlines()
+        plant_lines = planted.splitlines()
+        if not orig_lines or not plant_lines:
+            return (0, 0, "")
+
+        start0 = original.count("\n", 0, char_start)
+        end0 = original.count("\n", 0, max(char_start, min(char_end, len(original)) - 1))
+        start0 = min(start0, len(orig_lines) - 1)
+        end0 = min(max(end0, start0), len(orig_lines) - 1)
+
+        mapping: Dict[int, int] = {}
+        sm = difflib.SequenceMatcher(None, orig_lines, plant_lines, autojunk=False)
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == "equal":
+                for k in range(i1, i2):
+                    mapping[k] = j1 + (k - i1)
+            elif tag in ("replace", "delete"):
+                dest = min(j1, len(plant_lines) - 1)
+                for k in range(i1, i2):
+                    mapping[k] = dest
+            # insert：原版里没有对应行，跳过
+
+        p_start = mapping.get(start0)
+        p_end = mapping.get(end0)
+        if p_start is None or p_end is None:
+            return (0, 0, "")
+        p_start = min(max(p_start, 0), len(plant_lines) - 1)
+        p_end = min(max(p_end, 0), len(plant_lines) - 1)
+        if p_start > p_end:
+            p_start, p_end = p_end, p_start
+
+        excerpt = "\n".join(plant_lines[p_start : p_end + 1])
+        if not excerpt.strip():
+            return (0, 0, "")
+        return (p_start + 1, p_end + 1, excerpt)
+    except Exception:
+        return (0, 0, "")
 
 
 def build_probe(settings: Settings) -> Optional[Probe]:
@@ -97,7 +162,7 @@ def build_probe(settings: Settings) -> Optional[Probe]:
     if settings.use_mock_llm():
         return MarkerProbe()
     if os.getenv("MC_PROBE", "").strip().lower() in {"1", "true", "yes", "on"}:
-        return PYTEST_PROBE
+        return PurePythonProbe()
     return None
 
 
@@ -126,6 +191,7 @@ class SessionStore:
         self._lock = threading.Lock()
         self._bank_retriever: Optional[Retriever] = None  # 仅供离线建库的检索代理
         self._router_probe: Optional[Router] = None  # 只为读厂商隔离标记
+        self._last_retriever: Optional[Retriever] = None
 
     # ---- 一：开场 ----
 
@@ -135,6 +201,7 @@ class SessionStore:
 
         router = self.router_factory(self.settings)
         retriever = self.retriever_factory(self.settings)
+        self._last_retriever = retriever
         session = Session(
             settings=self.settings,
             router=router,
@@ -142,7 +209,13 @@ class SessionStore:
             bank=self.bank,
             probe=self.probe,
         )
-        handle = session.open(chosen)
+        try:
+            handle = session.open(chosen)
+        except RAGError as exc:
+            raise UpstreamError(str(exc)) from exc
+
+        if not handle.runs and not self.settings.use_mock_llm():
+            raise UpstreamError("所有候选题均未通过独立行为测试；未创建可评分会话")
 
         now = self.clock()
         entry = _Entry(
@@ -184,6 +257,10 @@ class SessionStore:
             run = _find_run(entry.handle, item_id)
             if run is None:
                 raise UnknownItem("这场会话里没有这道题: %s" % item_id)
+            if self.settings.rag_provider.lower() == "ragflow" and any(
+                evidence_id not in run.item.evidence_ids for evidence_id in cited
+            ):
+                raise CitationOutsideAnchor("引用编号不在本题封存的可引用证据中")
             if len(run.rounds) >= run.target_rounds:
                 # 轮次用完不是错误，是这道题结束了。照常回包，让前端渲染「本题已完成」，
                 # 不要把正常状态做成 409 —— 前端会把它当失败提示弹出来。
@@ -223,6 +300,8 @@ class SessionStore:
         payload["verdicts"] = [self._verdict(entry, verdict) for verdict in report.verdicts]
         payload["budget"] = entry.handle.budget.summary()
         payload["trace"] = list(entry.session.trace)
+        payload["cost_known"] = entry.router.summary()["cost_known"]
+        payload["report_fallback"] = entry.session.reporter.fallback_used
         return payload
 
     # ---- 只读 ----
@@ -254,7 +333,7 @@ class SessionStore:
     def anchors(self, session_id: str) -> List[dict]:
         """内部用：这道题在 seal 时刻冻结的证据集合，交给裁决层登记。
 
-        只回 item_id / doc_id / evidence_ids 三样。**不带** expected_level、rubric、
+        只回题号、文档号、本题证据与内部判例编号。**不带** expected_level、rubric、
         original——锚点里有答案侧信息，所以 /v1/anchor/* 在壳层还有一道内部令牌。
         学生可见的 payload 不经过这里（见 _item）。
         """
@@ -264,6 +343,7 @@ class SessionStore:
                 "item_id": run.item.item_id,
                 "doc_id": "doc_%s" % run.item.item_id,
                 "evidence_ids": list(run.item.evidence_ids),
+                "case_evidence_ids": list(run.item.case_evidence_ids),
             }
             for run in entry.handle.runs
         ]
@@ -308,6 +388,13 @@ class SessionStore:
         }
 
     def evidence(self, evidence_id: str, *, session_id: Optional[str] = None) -> dict:
+        if session_id:
+            entry = self._get(session_id)
+            allowed = {eid for run in entry.handle.runs for eid in run.item.evidence_ids}
+            if evidence_id not in allowed:
+                raise EvidenceForbidden("该证据不属于本会话的学生可读范围")
+            if not entry.handle.settled:
+                raise EvidenceForbidden("结算前不能读取证据原文")
         retriever = self._scoped_retriever(session_id)
         try:
             span = retriever.fetch(evidence_id)
@@ -316,9 +403,7 @@ class SessionStore:
         return to_dict(span)
 
     def rag_summary(self) -> dict:
-        retriever = self._bank_retriever
-        if retriever is None:
-            return {"backend": "（尚未构造）"}
+        retriever = self._last_retriever or self._scoped_retriever(None)
         summary = getattr(retriever, "summary", None)
         return summary() if callable(summary) else {"backend": type(retriever).__name__}
 
@@ -332,6 +417,11 @@ class SessionStore:
         if self._router_probe is None:
             self._router_probe = self.router_factory(self.settings)
         return bool(getattr(self._router_probe, "vendor_isolated", True))
+
+    def model_routes(self) -> dict:
+        if self._router_probe is None:
+            self._router_probe = self.router_factory(self.settings)
+        return self._router_probe.summary()["model_routes"]
 
     # ---- 内部 ----
 
@@ -383,16 +473,30 @@ class SessionStore:
 
     @staticmethod
     def _evidence_hint(entry: _Entry, item, evidence_id: str) -> dict:
-        """证据片段：只回显「埋雷版里也出现」的行，否则等于给答案。"""
+        """证据片段：把原版证据区间映射到埋雷版的行，只回显埋雷版行文本。
+
+        埋雷版里对应行丢了（映射失败）就退化成只有编号，不阻断开局，
+        也绝不回显原版的任何一行。
+        """
         try:
             span = entry.retriever.fetch(evidence_id)
         except Exception:  # 取不回就退化成只有编号，不阻断开局
-            return {"evidence_id": evidence_id, "excerpt": "", "visible_in_code": False}
-        visible = span.quote.strip() != "" and span.quote.strip() in item.planted
+            return {
+                "evidence_id": evidence_id,
+                "excerpt": "",
+                "visible_in_code": False,
+                "line_start": 0,
+                "line_end": 0,
+            }
+        line_start, line_end, excerpt = map_span_to_planted(
+            item.original, item.planted, span.char_start, span.char_end
+        )
         return {
             "evidence_id": evidence_id,
-            "excerpt": span.quote if visible else "",
-            "visible_in_code": visible,
+            "excerpt": excerpt,
+            "visible_in_code": bool(excerpt),
+            "line_start": line_start,
+            "line_end": line_end,
         }
 
     @staticmethod

@@ -1,0 +1,34 @@
+name: mine-clearance
+services:
+  api:
+    build: .
+    image: mine-clearance:local
+    ports:
+      - "127.0.0.1:8010:8010"
+    env_file:
+      - .env
+    environment:
+      RAGFLOW_BASE_URL: ${RAGFLOW_BASE_URL:-http://ragflow-gpu}
+      RAGFLOW_PATTERN_DATASET_ID: ${RAGFLOW_PATTERN_DATASET_ID:-18193412cbd311f18b858b1ef2314a80}
+      RAGFLOW_NEGATIVE_DATASET_ID: ${RAGFLOW_NEGATIVE_DATASET_ID:-20e9cf6ccbd711f18b868b1ef2314a80}
+      CASE_SNAPSHOT_DIR: /app/data/case_snapshots
+      LLM_AUDIT_DIR: /app/data/model_traces
+    volumes:
+      - evidence:/app/data
+    networks:
+      - default
+      - ragflow
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      start_period: 10s
+      retries: 3
+volumes:
+  evidence:
+networks:
+  ragflow:
+    external: true
+    # RAGFlow 容器所在的 Docker 网络名；本机官方部署通常是 docker_ragflow，可在 .env 里用 RAGFLOW_DOCKER_NETWORK 覆盖
+    name: ${RAGFLOW_DOCKER_NETWORK:-docker_ragflow}

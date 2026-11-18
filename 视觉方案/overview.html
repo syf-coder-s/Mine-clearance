@@ -1,0 +1,140 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:'InterVar';src:url('fonts/inter.woff2') format('woff2');font-weight:100 900;font-display:block;}
+@font-face{font-family:'JBMono';src:url('fonts/jbmono-400.woff2') format('woff2');font-weight:400;font-display:block;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1240px;background:#F6F6F3;color:#17181A;font-family:'InterVar','Segoe UI','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased;padding:34px 36px 30px}
+.head{display:flex;align-items:flex-end;gap:16px;padding-bottom:18px;border-bottom:1px solid #DCDCD5}
+.head h1{font-size:26px;font-weight:600;letter-spacing:-.01em}
+.head .sub{font-size:12.5px;color:#71747A;margin-left:auto;text-align:right;line-height:1.7}
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:250px 186px 1fr 214px 150px;gap:20px;align-items:center;padding:18px 0;border-bottom:1px solid #E6E6DF}
+.row:last-child{border-bottom:0}
+.thumb{width:250px;height:157px;border-radius:8px;overflow:hidden;border:1px solid #DCDCD5;display:block;background:#fff;box-shadow:0 6px 18px -12px rgba(20,20,20,.4)}
+.thumb img{width:100%;display:block}
+.idx{font-family:'JBMono',monospace;font-size:10.5px;color:#9A9CA1;letter-spacing:.1em}
+.nm{font-size:16px;font-weight:600;margin-top:3px;letter-spacing:.01em}
+.tag{display:inline-block;margin-top:6px;font-size:11px;padding:2px 8px;border-radius:999px;background:#EAEAE4;color:#5E6167}
+.one{font-size:11.5px;color:#71747A;margin-top:8px;line-height:1.65}
+.sw{display:flex;gap:5px}
+.sw .c{flex:0 0 42px}
+.sw .chip{height:38px;border-radius:5px;border:1px solid rgba(0,0,0,.06);margin-bottom:5px}
+.sw .hx{font-family:'JBMono',monospace;font-size:9px;color:#8A8D92;letter-spacing:-.02em}
+.swl{font-size:10px;color:#9A9CA1;letter-spacing:.1em;margin-bottom:7px;text-transform:uppercase}
+.fonts{font-size:11.5px;line-height:1.85;color:#4C4F55}
+.fonts b{font-weight:600;color:#17181A}
+.plot{font-size:11px;color:#71747A;line-height:1.75}
+.plot b{display:block;font-size:10px;color:#9A9CA1;font-weight:500;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.foot{margin-top:16px;display:flex;justify-content:space-between;font-size:11px;color:#9A9CA1}
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>排雷兵 · 四套整体视觉方向</h1>
+  <div class="sub">同一套页面结构，只换色彩 / 字体 / 圆角 / 图标<br>字号与信息层级完全对齐，选出方向后可整套落地</div>
+</div>
+<div class="rows">
+
+  <div class="row">
+    <img class="thumb" src="shots/a.png" alt="A">
+    <div>
+      <div class="idx">DIRECTION A</div>
+      <div class="nm">深空指挥舱</div>
+      <div class="tag">暗色 · 专业</div>
+      <div class="one">像安全运营中心，长时间盯代码与日志不刺眼</div>
+    </div>
+    <div class="sw">
+      <div class="swl">Palette</div>
+      <div style="display:flex;gap:5px">
+        <div class="c"><div class="chip" style="background:#0A101C"></div><div class="hx">0A101C</div></div>
+        <div class="c"><div class="chip" style="background:#0F1826"></div><div class="hx">0F1826</div></div>
+        <div class="c"><div class="chip" style="background:#5B93FF"></div><div class="hx">5B93FF</div></div>
+        <div class="c"><div class="chip" style="background:#42D39B"></div><div class="hx">42D39B</div></div>
+        <div class="c"><div class="chip" style="background:#EDB44F"></div><div class="hx">EDB44F</div></div>
+        <div class="c"><div class="chip" style="background:#F57D74"></div><div class="hx">F57D74</div></div>
+      </div>
+    </div>
+    <div class="fonts"><b>Inter</b> + Noto Sans SC<br><b>JetBrains Mono</b> 数字/ID<br>圆角 14 · 细描边 1px</div>
+    <div class="plot"><b>适合</b>代码审查页<br>系统状态页<br>演示大屏</div>
+  </div>
+
+  <div class="row">
+    <img class="thumb" src="shots/b.png" alt="B">
+    <div>
+      <div class="idx">DIRECTION B</div>
+      <div class="nm">暖白判例簿</div>
+      <div class="tag">浅色 · 编辑风</div>
+      <div class="one">米白纸感 + 衬线标题，像判例文书与评估报告</div>
+    </div>
+    <div class="sw">
+      <div class="swl">Palette</div>
+      <div style="display:flex;gap:5px">
+        <div class="c"><div class="chip" style="background:#FAF9F5"></div><div class="hx">FAF9F5</div></div>
+        <div class="c"><div class="chip" style="background:#FFFFFF"></div><div class="hx">FFFFFF</div></div>
+        <div class="c"><div class="chip" style="background:#4338CA"></div><div class="hx">4338CA</div></div>
+        <div class="c"><div class="chip" style="background:#2E7D5B"></div><div class="hx">2E7D5B</div></div>
+        <div class="c"><div class="chip" style="background:#A9762E"></div><div class="hx">A9762E</div></div>
+        <div class="c"><div class="chip" style="background:#AF4A40"></div><div class="hx">AF4A40</div></div>
+      </div>
+    </div>
+    <div class="fonts"><b>Noto Serif SC</b> 标题<br><b>Inter</b> + Noto Sans SC 正文<br>圆角 16 · 大留白</div>
+    <div class="plot"><b>适合</b>报告页<br>能力分析页<br>对外汇报</div>
+  </div>
+
+  <div class="row">
+    <img class="thumb" src="shots/c.png" alt="C">
+    <div>
+      <div class="idx">DIRECTION C</div>
+      <div class="nm">石墨琥珀</div>
+      <div class="tag">工程 · 仪表盘</div>
+      <div class="one">石墨深侧栏 + 琥珀强调，"警戒"语义最贴题</div>
+    </div>
+    <div class="sw">
+      <div class="swl">Palette</div>
+      <div style="display:flex;gap:5px">
+        <div class="c"><div class="chip" style="background:#F3F3F0"></div><div class="hx">F3F3F0</div></div>
+        <div class="c"><div class="chip" style="background:#191B1E"></div><div class="hx">191B1E</div></div>
+        <div class="c"><div class="chip" style="background:#C2740B"></div><div class="hx">C2740B</div></div>
+        <div class="c"><div class="chip" style="background:#3B7A4E"></div><div class="hx">3B7A4E</div></div>
+        <div class="c"><div class="chip" style="background:#A87417"></div><div class="hx">A87417</div></div>
+        <div class="c"><div class="chip" style="background:#AB3A30"></div><div class="hx">AB3A30</div></div>
+      </div>
+    </div>
+    <div class="fonts"><b>IBM Plex Sans</b> + Noto Sans SC<br><b>JetBrains Mono</b><br>圆角 8 · 1px 硬边框</div>
+    <div class="plot"><b>适合</b>训练主流程<br>雷型统计<br>操作台气质</div>
+  </div>
+
+  <div class="row">
+    <img class="thumb" src="shots/d.png" alt="D">
+    <div>
+      <div class="idx">DIRECTION D</div>
+      <div class="nm">原风格精修</div>
+      <div class="tag">零风险 · 快速</div>
+      <div class="one">保留现有蓝白企业风，只做令牌级精修</div>
+    </div>
+    <div class="sw">
+      <div class="swl">Palette</div>
+      <div style="display:flex;gap:5px">
+        <div class="c"><div class="chip" style="background:#F4F6FA"></div><div class="hx">F4F6FA</div></div>
+        <div class="c"><div class="chip" style="background:#FFFFFF"></div><div class="hx">FFFFFF</div></div>
+        <div class="c"><div class="chip" style="background:#2C5BE0"></div><div class="hx">2C5BE0</div></div>
+        <div class="c"><div class="chip" style="background:#2F9468"></div><div class="hx">2F9468</div></div>
+        <div class="c"><div class="chip" style="background:#B07C33"></div><div class="hx">B07C33</div></div>
+        <div class="c"><div class="chip" style="background:#C2554C"></div><div class="hx">C2554C</div></div>
+      </div>
+    </div>
+    <div class="fonts"><b>Inter</b> + Noto Sans SC<br><b>JetBrains Mono</b><br>圆角 14 · 更柔阴影</div>
+    <div class="plot"><b>适合</b>先上线<br>再局部升级<br>改动最小</div>
+  </div>
+
+</div>
+<div class="foot">
+  <span>字体均为 OFL 免费商用 · 图标建议 Lucide / Phosphor（线性，1.75px）</span>
+  <span>预览基于 1440×900 · 真实页面结构</span>
+</div>
+</body>
+</html>
+

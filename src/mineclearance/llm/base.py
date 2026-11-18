@@ -21,6 +21,8 @@ class LLMResponse:
     tokens_out: int
     cost_cny: float
     latency_ms: int
+    cost_known: bool = False
+    usage_known: bool = True
 
 
 @runtime_checkable

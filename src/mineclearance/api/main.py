@@ -1,7 +1,8 @@
 """FastAPI 薄壳：把 JSON 翻成 store 的调用，再翻回来。
 
 跑法（仓库根目录，且已 pip install -r requirements.txt）：
-    uvicorn mineclearance.api.main:app --reload
+    $env:PYTHONPATH = "src"
+    python -m uvicorn mineclearance.api.main:app --reload --port 8010
 
 三条边界，写在这里免得以后有人往里加业务逻辑：
     1  这里没有判级、没有引用核验、没有预算计算，全在 core。壳里出现 if 判断分数，就是错的。
@@ -24,7 +25,7 @@ from typing import Dict, List, Optional
 try:
     from fastapi import FastAPI, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse, Response, StreamingResponse
+    from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
     from pydantic import BaseModel, Field
 except ModuleNotFoundError as exc:  # pragma: no cover - 只有没装依赖时才会走到
     raise RuntimeError(
@@ -42,9 +43,11 @@ from ..upstream import (
     anchor_view,
     build_upstream,
 )
+from .static_serve import mount_frontend, resolve_dist
 from .store import SessionStore, StoreError
 
-DEFAULT_CORS = ("http://localhost:5173", "http://127.0.0.1:5173")
+DEFAULT_CORS = ("http://localhost:5173", "http://127.0.0.1:5173",
+                "http://localhost:5174", "http://127.0.0.1:5174")
 
 
 # ---- 请求体 ----
@@ -139,6 +142,8 @@ def create_app(
     app.state.store = session_store
     app.state.settings = settings
     app.state.upstream = decider
+    # 同源托管前端：存在 frontend/dist 时由后端直接服务 / 与前端路由（见 static_serve.py）
+    frontend_dist = resolve_dist(os.getenv("FRONTEND_DIST_DIR"))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins(),
@@ -165,12 +170,22 @@ def create_app(
 
     # ---- 系统 ----
 
+    @app.get("/", include_in_schema=False)
+    def home():
+        if frontend_dist is not None:
+            return FileResponse(frontend_dist / "index.html")
+        return RedirectResponse("/docs")
+
     @app.get("/v1/health", tags=["system"])
     def health() -> dict:
         return {
             "status": "ok",
             "schema_version": SCHEMA_VERSION,
             "llm_provider": settings.llm_provider,
+            "mock_llm": settings.use_mock_llm(),
+            "model_routes": session_store.model_routes(),
+            "cost_known": False,
+            "cost_note": "未配置核实后的单价；cost_cny=0 表示未估价，金额预算尚不能保证；调用次数上限仍有效",
             # false = 只配了一家厂商，对抗与升级裁判同源。判级复核因此不可信，
             # 这一行是给「你们怎么保证不同源」这个问题的现场答案。
             "vendor_isolated": session_store.vendor_isolated(),
@@ -221,7 +236,9 @@ def create_app(
     # ---- 预留的 RAG 代理（读方向；写索引不开放，见 store 里的说明）----
 
     @app.post("/v1/retrieve", tags=["rag"])
-    def retrieve(payload: RetrieveIn) -> dict:
+    def retrieve(payload: RetrieveIn, request: Request) -> dict:
+        if settings.rag_provider.lower() == "ragflow" and not payload.session_id:
+            _require_internal(settings, request)
         return session_store.retrieve(
             payload.query,
             top_k=payload.top_k,
@@ -230,7 +247,9 @@ def create_app(
         )
 
     @app.get("/v1/evidence/{evidence_id}", tags=["rag"])
-    def evidence(evidence_id: str, session_id: Optional[str] = None) -> dict:
+    def evidence(evidence_id: str, request: Request, session_id: Optional[str] = None) -> dict:
+        if settings.rag_provider.lower() == "ragflow" and not session_id:
+            _require_internal(settings, request)
         return session_store.evidence(evidence_id, session_id=session_id)
 
     # ---- 裁决层（预留给后端对接）----
@@ -280,6 +299,10 @@ def create_app(
         _sync_anchors(session_store, decider, payload.session_id)
         checked = decider.verify_reference(payload.session_id, item_id, payload.evidence_ids)
         return {"ok": True, "item_id": item_id, "checked": checked}
+
+    # SPA 兜底必须放在所有显式路由之后，避免吞掉 /v1/* 与 /docs。
+    if frontend_dist is not None:
+        mount_frontend(app, frontend_dist)
 
     return app
 

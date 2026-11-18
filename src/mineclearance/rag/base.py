@@ -10,10 +10,40 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import List, Optional, Protocol, Sequence, runtime_checkable
 
 from ..schemas import EvidenceSpan
+
+
+def compact_reference(text: str, max_chars: int = 900) -> str:
+    """压缩内部参考，保留雷型标题和判级关键词，避免把整篇他题代码送进模型。"""
+    if max_chars < 80:
+        raise ValueError("max_chars 必须至少为 80")
+    normalized = " ".join(str(text).split())
+    if len(normalized) <= max_chars:
+        return normalized
+    head_budget = max(40, max_chars // 3)
+    keyword_pattern = re.compile(
+        r"R\d{2}|L[0-4]|判级|依据|关键|触发|错误|边界|误报|正确|修复|API|复杂度",
+        re.IGNORECASE,
+    )
+    tail_budget = min(90, max_chars // 3)
+    tail = normalized[-tail_budget:]
+    sentences = [part.strip() for part in re.split(r"(?<=[。；.!?])\s*", normalized) if part.strip()]
+    keyword_hits = []
+    for sentence in sentences:
+        if keyword_pattern.search(sentence) and sentence not in keyword_hits:
+            keyword_hits.append(sentence[:110])
+    middle = "；".join(keyword_hits[:3])
+    fixed = len(" …  … ") + len(middle) + len(tail)
+    head_budget = max(40, max_chars - fixed)
+    head = normalized[:head_budget]
+    result = head + " … " + middle + " … " + tail
+    if len(result) > max_chars:
+        result = result[: max_chars - tail_budget - 3] + " … " + tail
+    return result[:max_chars]
 
 
 class RAGError(RuntimeError):
@@ -95,6 +125,12 @@ class SealedView:
                 continue
         return spans
 
+    def record_reference_usage(self, agent: str, references: Sequence[str]) -> None:
+        """可选的只写统计钩子；没有统计实现的检索器保持兼容。"""
+        recorder = getattr(self._retriever, "record_agent_reference_usage", None)
+        if callable(recorder):
+            recorder(agent, references)
+
 
 def rank_and_cut(chunks: Sequence[RetrievedChunk], top_k: int, *, min_score: float = 0.0) -> List[RetrievedChunk]:
     """排序后截断。召回 8–12，进裁判的只留 3，这一步在本地做，不发请求。"""
@@ -103,11 +139,14 @@ def rank_and_cut(chunks: Sequence[RetrievedChunk], top_k: int, *, min_score: flo
     return ordered[: max(0, top_k)]
 
 
-def as_query(item_title: str, defect_type: str, language: str = "") -> str:
+def as_query(item_title: str, defect_type: str, language: str = "", context: str = "") -> str:
     """检索查询串。不做在线查询改写，拼一次就定稿。"""
     parts: List[str] = [item_title, defect_type]
     if language:
         parts.append(language)
+    if context and context.strip():
+        # context 只来自内部题目 diff/rubric，不接收学生输入；截断避免把整段代码塞进检索。
+        parts.append(" ".join(context.strip().split())[:500])
     return " ".join(p for p in parts if p)
 
 
